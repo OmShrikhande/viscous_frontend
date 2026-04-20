@@ -7,7 +7,7 @@ import '../models/login_response.dart';
 class AuthService {
   final String baseUrl = dotenv.env['BASE_URL'] ?? 'http://localhost:3000';
 
-  Future<LoginResponse> login(String email, String password) async {
+  Future<LoginResponse> login(String mobile, String password) async {
     final url = Uri.parse('$baseUrl/api/auth/login');
 
     try {
@@ -17,7 +17,7 @@ class AuthService {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: {
-          'email': email,
+          'mobile': mobile,
           'password': password,
         },
       ).timeout(

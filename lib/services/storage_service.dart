@@ -5,6 +5,7 @@ import '../models/login_response.dart';
 class StorageService {
   static const String _tokenKey = 'auth_token';
   static const String _loginDataKey = 'login_data';
+  static const String _isDarkKey = 'is_dark_mode';
 
   Future<void> saveLoginData(LoginResponse loginResponse) async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,5 +39,15 @@ class StorageService {
   Future<bool> isLoggedIn() async {
     final token = await getToken();
     return token != null && token.isNotEmpty;
+  }
+
+  Future<void> setDarkMode(bool isDark) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isDarkKey, isDark);
+  }
+
+  Future<bool> getDarkMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_isDarkKey) ?? true; // Default to dark mode
   }
 }
