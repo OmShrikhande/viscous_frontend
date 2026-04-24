@@ -1,18 +1,52 @@
-# viscous_frontend
+# Parent Bus Tracker (Flutter Frontend)
 
-A new Flutter project.
+Frontend-first Flutter app for a parent school-bus tracking experience with very low cognitive load.
 
-## Getting Started
+## Implemented Scope
 
-This project is a starting point for a Flutter application.
+- `3 tabs only`: `Home`, `Map`, `Profile`
+- `OTP-only` authentication flow (mobile + OTP)
+- Home control center with:
+  - profile card
+  - mini segmented panel (`ETA`, `Admin`, `Map`)
+  - vertical stop progression tracker
+  - smart alert banner states
+- Map tab with `flutter_map` (Leaflet-compatible):
+  - route polyline
+  - stop markers
+  - animated-like live bus marker updates
+  - stale GPS and journey state messaging
+- Profile tab with route overview/change placeholder, preferences, emergency details, logout
 
-A few resources to get you started if this is your first Flutter project:
+## Architecture
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Clean layered direction (lightweight implementation):
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-"# viscous-flutter-app" 
+- `presentation`: `lib/screens/`
+- `domain state`: `lib/app_state.dart`
+- `data/services`: `lib/services/` (existing)
+
+State management: Riverpod  
+Navigation: GoRouter  
+Networking-ready: Dio  
+Map: flutter_map + OpenStreetMap tiles
+
+## Setup
+
+1. Install Flutter SDK (stable)
+2. Run:
+   - `flutter pub get`
+   - `flutter run`
+
+## Environment
+
+Keep `.env` for runtime URLs and keys. Example fields:
+
+- `BASE_URL=https://api.example.com`
+- `OPENROUTESERVICE_API_KEY=your_key_here`
+- `FCM_SENDER_ID=your_sender_id`
+
+## Notes
+
+- Real APIs, FCM background handlers, and OpenRouteService polyline fetching are documented in `api.md`.
+- Current implementation includes safe frontend simulation for real-time updates every 5 seconds.

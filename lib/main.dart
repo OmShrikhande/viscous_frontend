@@ -1,86 +1,66 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import 'app_state.dart';
+import 'screens/app_shell_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
-import 'services/storage_service.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  runApp(const MyApp());
+  await dotenv.load(fileName: '.env');
+  runApp(const ProviderScope(child: BusTrackerApp()));
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+class BusTrackerApp extends ConsumerWidget {
+  const BusTrackerApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  final StorageService _storageService = StorageService();
-  bool _isLoading = true;
-  bool _isLoggedIn = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkLoginStatus();
-  }
-
-  Future<void> _checkLoginStatus() async {
-    try {
-      final isLoggedIn = await _storageService.isLoggedIn();
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = isLoggedIn;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = false;
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAuthenticated = ref.watch(authStateProvider);
+    final router = GoRouter(
+      initialLocation: isAuthenticated ? '/app' : '/login',
+      routes: [
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => const LoginScreen(),
         ),
-      );
-    }
+        GoRoute(
+          path: '/app',
+          builder: (context, state) => const AppShellScreen(),
+        ),
+      ],
+      redirect: (context, state) {
+        final onLogin = state.matchedLocation == '/login';
+        if (!isAuthenticated && !onLogin) {
+          return '/login';
+        }
+        if (isAuthenticated && onLogin) {
+          return '/app';
+        }
+        return null;
+      },
+    );
 
-    return MaterialApp(
-      title: 'Viscous App',
+    return MaterialApp.router(
+      title: 'Parent Bus Tracker',
       debugShowCheckedModeBanner: false,
+      routerConfig: router,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF1E3A8A),
+          secondary: Color(0xFFF59E0B),
+          surface: Colors.white,
+          error: Color(0xFFDC2626),
         ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            elevation: 5,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontWeight: FontWeight.w700),
+          bodyLarge: TextStyle(fontSize: 16),
         ),
       ),
-      home: _isLoggedIn ? const HomeScreen() : const LoginScreen(),
     );
   }
 }

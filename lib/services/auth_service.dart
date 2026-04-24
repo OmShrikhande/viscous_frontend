@@ -11,28 +11,28 @@ class AuthService {
     final url = Uri.parse('$baseUrl/api/auth/login');
 
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: {
-          'email': email,
-          'password': password,
-        },
-      ).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw Exception('Connection timeout. Please check your internet connection and try again.');
-        },
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: {'email': email, 'password': password},
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw Exception(
+                'Connection timeout. Please check your internet connection and try again.',
+              );
+            },
+          );
 
       final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200 && responseData['success'] == true) {
         return LoginResponse.fromJson(responseData);
       } else {
-        final message = responseData['message'] ?? 'Login failed: ${response.statusCode}';
+        final message =
+            responseData['message'] ?? 'Login failed: ${response.statusCode}';
         throw Exception(message);
       }
     } catch (e) {
