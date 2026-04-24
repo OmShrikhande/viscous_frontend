@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: #0a0e21; }
+    .leaflet-container { background: #0a0e21; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    (function () {
+      var map = L.map('map', { zoomControl: true }).setView([40.7128, -74.0060], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+
+      var busIcon = L.divIcon({
+        className: 'bus-marker',
+        html: '<div style="width:36px;height:36px;border-radius:50%;background:#002366;border:3px solid #E1AD01;display:flex;align-items:center;justify-content:center;font-size:18px;">🚌</div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      });
+
+      var marker = L.marker([40.7128, -74.0060], { icon: busIcon }).addTo(map);
+      map.setView(marker.getLatLng(), 14);
+
+      var t0 = Date.now();
+      var path = [
+        [40.7128, -74.0060],
+        [40.7180, -74.0020],
+        [40.7220, -74.0080],
+        [40.7160, -74.0140]
+      ];
+      function lerp(a, b, u) { return a + (b - a) * u; }
+      setInterval(function () {
+        var elapsed = (Date.now() - t0) / 8000;
+        var u = elapsed % 1;
+        var i = Math.floor(elapsed) % (path.length - 1);
+        var p0 = path[i], p1 = path[i + 1];
+        var lat = lerp(p0[0], p1[0], u);
+        var lng = lerp(p0[1], p1[1], u);
+        marker.setLatLng([lat, lng]);
+        map.panTo([lat, lng], { animate: true, duration: 0.35, easeLinearity: 0.25 });
+      }, 800);
+    })();
+  </script>
+</body>
+</html>
