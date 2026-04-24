@@ -3,17 +3,11 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-<<<<<<< HEAD
-)
-
-list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  jni
-=======
   firebase_core
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

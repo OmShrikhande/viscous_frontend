@@ -1,37 +1,21 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'dart:math' as math;
+import 'dart:ui';
 import '../app_state.dart';
+import '../services/storage_service.dart';
+import '../models/login_response.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
-=======
-import 'dart:math' as math;
-import 'dart:ui';
-import '../services/storage_service.dart';
-import '../models/login_response.dart';
-import 'home_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  final Function(bool) onThemeChanged;
-  final bool isDarkMode;
-  const LoginScreen({super.key, required this.onThemeChanged, required this.isDarkMode});
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-<<<<<<< HEAD
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _mobileController = TextEditingController();
-  final _otpController = TextEditingController();
-  bool _otpSent = false;
-  bool _loading = false;
-=======
-class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
+class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -40,7 +24,23 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   late AnimationController _animationController;
   bool _isLoading = false;
   bool _obscurePassword = true;
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 15),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _mobileController.dispose();
+    _passwordController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
 
   // Royal Blue & Mustard theme
   static const Color royalBlue = Color(0xFF002366);
@@ -59,8 +59,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   @override
   void dispose() {
     _mobileController.dispose();
-<<<<<<< HEAD
-    _otpController.dispose();
+    _passwordController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -96,12 +96,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
-=======
-    _passwordController.dispose();
-    _animationController.dispose();
-    super.dispose();
-  }
-
   Future<void> _login() async {
     if (_formKey.currentState == null || !_formKey.currentState!.validate()) return;
     
@@ -123,16 +117,10 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
 
     await _storageService.saveLoginData(mockResponse);
+    ref.read(authStateProvider.notifier).state = true;
 
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(
-            onThemeChanged: widget.onThemeChanged, 
-            isDarkMode: widget.isDarkMode
-          ),
-        ),
-      );
+      context.go('/app');
     }
 >>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
   }
@@ -142,8 +130,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-<<<<<<< HEAD
-      body: SafeArea(
+      backgroundColor: royalBlue,
+      body: Stack(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -366,9 +354,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       ),
     );
   }
-<<<<<<< HEAD
-}
-=======
 
   Widget _buildRoundedTextField({
     required TextEditingController controller,

@@ -30,8 +30,6 @@ class LoginResponse {
     };
   }
 }
-<<<<<<< HEAD
-=======
 
 class User {
   final String? uid;
@@ -64,4 +62,3 @@ class User {
     };
   }
 }
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395

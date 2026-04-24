@@ -40,9 +40,6 @@ class StorageService {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
-<<<<<<< HEAD
-}
-=======
 
   Future<void> setDarkMode(bool isDark) async {
     final prefs = await SharedPreferences.getInstance();
@@ -54,4 +51,3 @@ class StorageService {
     return prefs.getBool(_isDarkKey) ?? true; // Default to dark mode
   }
 }
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
