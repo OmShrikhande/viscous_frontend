@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -155,3 +156,6 @@ final trackingProvider =
     );
 
 final homeMiniTabProvider = StateProvider<int>((ref) => 0);
+
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
+

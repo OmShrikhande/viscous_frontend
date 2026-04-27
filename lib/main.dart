@@ -13,8 +13,17 @@ import 'screens/login_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // Firebase is not configured for web yet — skip gracefully so the
+  // Flutter UI still runs. Wire up firebase_options.dart when ready.
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    // ignore: avoid_print
+    print('[main] Firebase init skipped on this platform: $e');
+  }
+
   runApp(const ProviderScope(child: BusTrackerApp()));
 }
 
@@ -24,6 +33,8 @@ class BusTrackerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isAuthenticated = ref.watch(authStateProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    
     final router = GoRouter(
       initialLocation: isAuthenticated ? '/app' : '/login',
       routes: [
@@ -49,21 +60,66 @@ class BusTrackerApp extends ConsumerWidget {
     );
 
     return MaterialApp.router(
-      title: 'Parent Bus Tracker',
+      title: 'Viscous Bus Tracker',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
+      themeMode: themeMode,
+      // ── LIGHT THEME ────────────────────────────────────────────────────────
       theme: ThemeData(
         useMaterial3: true,
+        brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         colorScheme: const ColorScheme.light(
-          primary: Color(0xFF1E3A8A),
-          secondary: Color(0xFFF59E0B),
-          surface: Colors.white,
-          error: Color(0xFFDC2626),
+          primary:   Color(0xFF002366),
+          secondary: Color(0xFF00D4FF),
+          surface:   Colors.white,
+          error:     Color(0xFFDC2626),
         ),
         textTheme: const TextTheme(
-          titleLarge: TextStyle(fontWeight: FontWeight.w700),
-          bodyLarge: TextStyle(fontSize: 16),
+          titleLarge: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF002366)),
+          bodyLarge:  TextStyle(fontSize: 15, color: Color(0xFF1E293B)),
+          bodyMedium: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+        ),
+        cardTheme: const CardThemeData(
+          color: Colors.white,
+          elevation: 2,
+          shadowColor: Colors.black12,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            side: BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+        ),
+      ),
+      // ── DARK THEME ─────────────────────────────────────────────────────────
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF080D22),
+        colorScheme: const ColorScheme.dark(
+          primary:   Color(0xFF00D4FF),
+          secondary: Color(0xFFFFB930),
+          surface:   Color(0xFF0E1530),
+          error:     Color(0xFFFF4D6D),
+        ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFEAF0FF)),
+          bodyLarge:  TextStyle(fontSize: 15, color: Color(0xFFEAF0FF)),
+          bodyMedium: TextStyle(fontSize: 13, color: Color(0xFF5A6A90)),
+        ),
+        cardTheme: const CardThemeData(
+          color: Color(0xFF0E1530),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            side: BorderSide(color: Color(0xFF1A2550)),
+          ),
+        ),
+        popupMenuTheme: const PopupMenuThemeData(
+          color: Color(0xFF0E1530),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            side: BorderSide(color: Color(0xFF1A2550)),
+          ),
         ),
       ),
     );

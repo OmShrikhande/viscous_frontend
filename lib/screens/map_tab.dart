@@ -4,95 +4,288 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_state.dart';
 
+// ─── Constants ────────────────────────────────────────────────────────────
+const Color _kCyan    = Color(0xFF00D4FF);
+const Color _kAmber   = Color(0xFFFFB930);
+const Color _kGreen   = Color(0xFF00E676);
+
 class MapTab extends ConsumerWidget {
   const MapTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tracking = ref.watch(trackingProvider);
-    final points = tracking.stops.map((s) => s.position).toList();
-    final status = tracking.routeCompleted
+    final theme    = Theme.of(context);
+    final isDark   = theme.brightness == Brightness.dark;
+    final textDim  = isDark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
+    
+    final points   = tracking.stops.map((s) => s.position).toList();
+
+    final String status = tracking.routeCompleted
         ? 'Route complete'
         : !tracking.routeStarted
-        ? 'Waiting for route start'
-        : tracking.isGpsStale
-        ? 'GPS stale, showing last known position'
-        : 'Live';
+            ? 'Waiting for route start'
+            : tracking.isGpsStale
+                ? 'GPS stale — last known position'
+                : 'Live tracking';
 
-    return SafeArea(
-      child: Stack(
-        children: [
-          FlutterMap(
-            options: MapOptions(
-              initialCenter: tracking.busPosition,
-              initialZoom: 14,
+    final Color statusColor = tracking.routeCompleted
+        ? _kAmber
+        : !tracking.routeStarted
+            ? textDim
+            : tracking.isGpsStale
+                ? _kAmber
+                : _kGreen;
+
+    return Stack(
+      children: [
+        // ── Full-screen map ───────────────────────────────────────────────
+        FlutterMap(
+          options: MapOptions(
+            initialCenter: tracking.busPosition,
+            initialZoom: 14,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.viscous_frontend',
+              // Add a slight tile filter for dark mode if desired
+              tileBuilder: isDark ? (context, tileWidget, tile) {
+                return ColorFiltered(
+                  colorFilter: const ColorFilter.matrix([
+                    -0.2126, -0.7152, -0.0722, 0, 255,
+                    -0.2126, -0.7152, -0.0722, 0, 255,
+                    -0.2126, -0.7152, -0.0722, 0, 255,
+                    0, 0, 0, 1, 0,
+                  ]),
+                  child: tileWidget,
+                );
+              } : null,
             ),
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: points,
+                  color: _kCyan.withOpacity(0.8),
+                  strokeWidth: 5,
+                  borderColor: _kCyan.withOpacity(0.3),
+                  borderStrokeWidth: 10,
+                ),
+              ],
+            ),
+            MarkerLayer(
+              markers: [
+                // Stop markers
+                ...tracking.stops.map(
+                  (s) => Marker(
+                    point: s.position,
+                    width: 32,
+                    height: 32,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.scaffoldBackgroundColor.withOpacity(0.85),
+                        border: Border.all(color: _kAmber, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: _kAmber.withOpacity(0.4), blurRadius: 8),
+                        ],
+                      ),
+                      child: const Icon(Icons.circle, color: _kAmber, size: 10),
+                    ),
+                  ),
+                ),
+                // Bus marker
+                Marker(
+                  point: tracking.busPosition,
+                  width: 56,
+                  height: 56,
+                  child: _PulsingBusMarker(isMoving: tracking.routeStarted && !tracking.routeCompleted),
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        // ── Top overlay card ──────────────────────────────────────────────
+        SafeArea(
+          child: Column(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.viscous_frontend',
-              ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: points,
-                    color: const Color(0xFF1E3A8A),
-                    strokeWidth: 5,
-                  ),
-                ],
-              ),
-              MarkerLayer(
-                markers: [
-                  ...tracking.stops.map(
-                    (s) => Marker(
-                      point: s.position,
-                      width: 28,
-                      height: 28,
-                      child: const Icon(
-                        Icons.location_on,
-                        color: Color(0xFFF59E0B),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withOpacity(0.95),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.5 : 0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
                       ),
-                    ),
+                    ],
                   ),
-                  Marker(
-                    point: tracking.busPosition,
-                    width: 64,
-                    height: 64,
-                    child: Transform.rotate(
-                      angle: 0.5,
-                      child: const Icon(
-                        Icons.directions_bus,
-                        color: Color(0xFF16A34A),
-                        size: 36,
+                  child: Row(
+                    children: [
+                      // Speed chip
+                      const _InfoChip(
+                        icon: Icons.speed_rounded,
+                        value: '27 km/h',
+                        color: _kCyan,
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      // ETA chip
+                      _InfoChip(
+                        icon: Icons.schedule_rounded,
+                        value: '${tracking.etaToNextMinutes} min eta',
+                        color: _kAmber,
+                      ),
+                      const Spacer(),
+                      // Status badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: statusColor.withOpacity(0.4)),
+                        ),
+                        child: Text(status,
+                            style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+              // Next stop banner
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _kCyan.withOpacity(0.2)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.location_on_rounded, color: _kCyan, size: 14),
+                    const SizedBox(width: 8),
+                    Text('Next stop:  ', style: TextStyle(color: textDim, fontSize: 11)),
+                    Text(tracking.nextStop,
+                        style: TextStyle(
+                          color: theme.textTheme.bodyLarge?.color, 
+                          fontSize: 12, 
+                          fontWeight: FontWeight.w700
+                        )),
+                  ]),
+                ),
               ),
             ],
           ),
-          Positioned(
-            left: 12,
-            right: 12,
-            top: 12,
-            child: Card(
-              child: ListTile(
-                title: Text(
-                  'Speed ${tracking.kmh.toStringAsFixed(0)} km/h • Next ${tracking.nextStop}',
-                ),
-                subtitle: Text(
-                  'ETA ${tracking.etaToNextMinutes} mins • $status',
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.gps_fixed),
-                  onPressed: () {},
-                  tooltip: 'Focus on bus',
-                ),
+        ),
+
+        // ── GPS focus FAB ─────────────────────────────────────────────────
+        Positioned(
+          bottom: 110,
+          right: 16,
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.surface,
+                border: Border.all(color: _kCyan.withOpacity(0.4)),
+                boxShadow: [
+                  BoxShadow(color: _kCyan.withOpacity(0.2), blurRadius: 12),
+                ],
               ),
+              child: const Icon(Icons.gps_fixed_rounded, color: _kCyan, size: 20),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+}
+
+class _PulsingBusMarker extends StatefulWidget {
+  final bool isMoving;
+  const _PulsingBusMarker({required this.isMoving});
+  @override
+  State<_PulsingBusMarker> createState() => _PulsingBusMarkerState();
+}
+
+class _PulsingBusMarkerState extends State<_PulsingBusMarker>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl   = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
+    _scale  = Tween<double>(begin: 0.85, end: 1.15).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            if (widget.isMoving)
+              Transform.scale(
+                scale: _scale.value,
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _kGreen.withOpacity(0.12 * _ctrl.value),
+                  ),
+                ),
+              ),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.scaffoldBackgroundColor,
+                border: Border.all(color: _kGreen, width: 2.5),
+                boxShadow: [BoxShadow(color: _kGreen.withOpacity(0.6), blurRadius: 12 * (_ctrl.value + 0.3))],
+              ),
+              child: const Icon(Icons.directions_bus_rounded, color: _kGreen, size: 18),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final Color color;
+  const _InfoChip({required this.icon, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, color: color, size: 14),
+      const SizedBox(width: 5),
+      Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+    ]);
   }
 }
