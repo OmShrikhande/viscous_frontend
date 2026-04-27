@@ -10,7 +10,6 @@ import '../models/login_response.dart';
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
-
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
@@ -24,23 +23,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   late AnimationController _animationController;
   bool _isLoading = false;
   bool _obscurePassword = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 15),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _mobileController.dispose();
-    _passwordController.dispose();
-    _animationController.dispose();
-    super.dispose();
-  }
 
   // Royal Blue & Mustard theme
   static const Color royalBlue = Color(0xFF002366);
@@ -64,41 +46,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
-    if (_mobileController.text.trim().length < 10) {
-      _show('Enter a valid mobile number');
-      return;
-    }
-    setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() {
-      _otpSent = true;
-      _loading = false;
-    });
-    _show('OTP sent to ${_mobileController.text.trim()}');
-  }
-
-  Future<void> _verifyOtp() async {
-    if (_otpController.text.trim().length < 4) {
-      _show('Enter a valid OTP');
-      return;
-    }
-    setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    ref.read(authStateProvider.notifier).state = true;
-    if (!mounted) return;
-    setState(() => _loading = false);
-    context.go('/app');
-  }
-
-  void _show(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   Future<void> _login() async {
     if (_formKey.currentState == null || !_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
 
     await Future.delayed(const Duration(seconds: 1));
@@ -122,7 +72,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     if (mounted) {
       context.go('/app');
     }
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
   }
 
   @override
@@ -130,70 +79,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: royalBlue,
-      body: Stack(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Icon(
-                        Icons.directions_bus,
-                        size: 56,
-                        color: Color(0xFF1E3A8A),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Track Your Child\'s Bus',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      TextField(
-                        controller: _mobileController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Mobile Number',
-                          prefixIcon: Icon(Icons.phone),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_otpSent)
-                        TextField(
-                          controller: _otpController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'OTP',
-                            prefixIcon: Icon(Icons.password),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _loading
-                            ? null
-                            : (_otpSent ? _verifyOtp : _sendOtp),
-                        child: Text(
-                          _loading
-                              ? 'Please wait...'
-                              : _otpSent
-                              ? 'Verify OTP'
-                              : 'Continue',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-=======
       backgroundColor: royalBlue,
       body: Stack(
         children: [
@@ -316,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 50),
 
                 // Login Button
@@ -347,7 +232,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                   ),
                 ),
               ],
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395
             ),
           ),
         ),
@@ -443,4 +327,3 @@ class WavePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant WavePainter oldDelegate) => true;
 }
->>>>>>> c1c5301a202ae6e6c351a186241b8a4d4ef7b395

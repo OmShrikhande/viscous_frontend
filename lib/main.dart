@@ -17,7 +17,6 @@ Future<void> main() async {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   runApp(const ProviderScope(child: BusTrackerApp()));
 }
-}
 
 class BusTrackerApp extends ConsumerWidget {
   const BusTrackerApp({super.key});
