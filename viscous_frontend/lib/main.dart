@@ -79,11 +79,13 @@ class BusTrackerApp extends ConsumerWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+        dividerColor: const Color(0xFFE2E8F0),
         colorScheme: const ColorScheme.light(
-          primary:   Color(0xFF002366),
-          secondary: Color(0xFF00D4FF),
-          surface:   Colors.white,
+          primary:   Color(0xFF0F4C81),
+          secondary: Color(0xFF0284C7),
+          surface:   Color(0xFFFFFFFF),
+          surfaceContainerHighest: Color(0xFFEFF6FF),
           error:     Color(0xFFDC2626),
         ),
         textTheme: const TextTheme(

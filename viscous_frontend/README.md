@@ -49,4 +49,5 @@ Keep `.env` for runtime URLs and keys. Example fields:
 ## Notes
 
 - Real APIs, FCM background handlers, and OpenRouteService polyline fetching are documented in `api.md`.
-- Current implementation includes safe frontend simulation for real-time updates every 5 seconds.
+- Live tracking polls the backend on a **low-frequency** interval (see `lib/app_state.dart`) and supports **pull-to-refresh** on Home, Map, and Profile; map auto-follow is **debounced** to avoid jitter.
+- Repo root `README.md` explains scheduled sync logs and Firestore read/write tuning.

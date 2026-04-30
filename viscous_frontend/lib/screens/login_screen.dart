@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../app_state.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
-import '../models/login_response.dart';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const Color _kBg      = Color(0xFF050A1E);

@@ -29,5 +29,7 @@ export const env = {
     movementThresholdMeters: Number(process.env.MOVEMENT_THRESHOLD_METERS ?? 10),
     internalApiKey: process.env.INTERNAL_API_KEY ?? "",
     routeNumber: process.env.ROUTE_NUMBER ?? process.env.Route ?? ""
-  }
+  },
+  /** Short TTL cache for GET /bus-location so many parents on one route share Firestore reads. */
+  trackingSnapshotCacheTtlMs: Number(process.env.TRACKING_SNAPSHOT_CACHE_TTL_MS ?? 4_000)
 };

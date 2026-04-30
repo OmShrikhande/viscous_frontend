@@ -35,8 +35,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     _loadProfile();
   }
 
-  Future<void> _loadProfile() async {
-    setState(() => _loading = true);
+  Future<void> _loadProfile({bool showLoader = true}) async {
+    if (showLoader) setState(() => _loading = true);
     try {
       final local = await _storageService.getLoginData();
       if (local?.user != null) {
@@ -52,8 +52,15 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
         );
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && showLoader) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _onPullRefresh() async {
+    await Future.wait([
+      ref.read(trackingProvider.notifier).refreshTracking(),
+      _loadProfile(showLoader: false),
+    ]);
   }
 
   void _applyUser(User user) {
@@ -118,7 +125,11 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
       child: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
+            : RefreshIndicator(
+                color: theme.colorScheme.primary,
+                onRefresh: _onPullRefresh,
+                child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
           children: [
             // ── Header gradient ───────────────────────────────────────────
@@ -331,6 +342,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
           ],
         ),
       ),
+    ),
     );
   }
 }

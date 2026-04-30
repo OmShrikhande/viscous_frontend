@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +21,7 @@ class MapTab extends ConsumerStatefulWidget {
 
 class _MapTabState extends ConsumerState<MapTab> {
   late final MapController _mapController;
+  Timer? _mapFollowDebounce;
 
   @override
   void initState() {
@@ -28,8 +31,55 @@ class _MapTabState extends ConsumerState<MapTab> {
 
   @override
   void dispose() {
+    _mapFollowDebounce?.cancel();
     _mapController.dispose();
     super.dispose();
+  }
+
+  void _showBusDetails(TrackingState t) {
+    final theme = Theme.of(context);
+    final dirLabel = t.direction == -1 ? 'Return' : 'Forward';
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Bus details',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 14),
+                _BusDetailRow(label: 'Bus ID', value: t.routeMeta?.busId ?? '—'),
+                _BusDetailRow(label: 'Route', value: t.routeMeta?.routeNumber ?? '—'),
+                _BusDetailRow(
+                    label: 'Path',
+                    value:
+                        '${t.routeMeta?.from ?? "—"} → ${t.routeMeta?.to ?? "—"}'),
+                _BusDetailRow(
+                    label: 'Speed',
+                    value: '${t.kmh.toStringAsFixed(1)} km/h (app estimate)'),
+                _BusDetailRow(
+                    label: 'Status',
+                    value: t.isBusRunning ? 'Running' : 'Stopped / idle'),
+                _BusDetailRow(label: 'Direction', value: dirLabel),
+                _BusDetailRow(label: 'Next stop', value: t.nextStop),
+                _BusDetailRow(label: 'GPS', value: t.isGpsStale ? 'Stale' : 'Live'),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -38,12 +88,16 @@ class _MapTabState extends ConsumerState<MapTab> {
     final theme    = Theme.of(context);
     final isDark   = theme.brightness == Brightness.dark;
     final textDim  = isDark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
+    final cardBorder =
+        isDark ? theme.dividerColor.withOpacity(0.12) : const Color(0xFFCBD5E1);
 
-    // Listen for bus position changes and move the map
     ref.listen(trackingProvider.select((s) => s.busPosition), (prev, next) {
-      if (next.latitude != 0 && next.longitude != 0) {
+      if (next.latitude == 0 && next.longitude == 0) return;
+      _mapFollowDebounce?.cancel();
+      _mapFollowDebounce = Timer(const Duration(milliseconds: 320), () {
+        if (!mounted) return;
         _mapController.move(next, _mapController.camera.zoom);
-      }
+      });
     });
 
     final String status = tracking.routeCompleted
@@ -62,7 +116,19 @@ class _MapTabState extends ConsumerState<MapTab> {
                 ? _kAmber
                 : _kGreen;
 
-    return Stack(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight.isFinite && constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height;
+        return RefreshIndicator(
+          color: theme.colorScheme.primary,
+          onRefresh: () => ref.read(trackingProvider.notifier).refreshTracking(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SizedBox(
+              height: h,
+              child: Stack(
       children: [
         // ── Full-screen map ───────────────────────────────────────────────
         FlutterMap(
@@ -92,12 +158,47 @@ class _MapTabState extends ConsumerState<MapTab> {
                     ),
                   ),
                 ),
-                // Bus marker
+                // Bus marker (tap for details; speed from client-side estimate in app state)
                 Marker(
                   point: tracking.busPosition,
-                  width: 50,
-                  height: 50,
-                  child: _PulsingBusMarker(isMoving: tracking.isBusRunning),
+                  width: 56,
+                  height: 62,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showBusDetails(tracking),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        _PulsingBusMarker(isMoving: tracking.isBusRunning),
+                        Positioned(
+                          bottom: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface.withOpacity(0.95),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: _kCyan.withOpacity(0.35)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              '${tracking.kmh.round()} km/h',
+                              style: TextStyle(
+                                color: isDark ? _kCyan : const Color(0xFF0369A1),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -113,13 +214,13 @@ class _MapTabState extends ConsumerState<MapTab> {
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withOpacity(0.95),
+                    color: theme.colorScheme.surface.withOpacity(isDark ? 0.95 : 1),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                    border: Border.all(color: cardBorder),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.5 : 0.1),
-                        blurRadius: 20,
+                        color: Colors.black.withOpacity(isDark ? 0.45 : 0.08),
+                        blurRadius: isDark ? 20 : 14,
                         offset: const Offset(0, 6),
                       ),
                     ],
@@ -164,9 +265,11 @@ class _MapTabState extends ConsumerState<MapTab> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withOpacity(0.9),
+                    color: theme.colorScheme.surface.withOpacity(isDark ? 0.9 : 1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _kCyan.withOpacity(0.2)),
+                    border: Border.all(
+                      color: isDark ? _kCyan.withOpacity(0.2) : const Color(0xFF93C5FD),
+                    ),
                   ),
                   child: Row(children: [
                     const Icon(Icons.location_on_rounded, color: _kCyan, size: 14),
@@ -222,6 +325,48 @@ class _MapTabState extends ConsumerState<MapTab> {
           ),
         ),
       ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BusDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _BusDetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dim = theme.brightness == Brightness.dark
+        ? const Color(0xFF5A6A90)
+        : const Color(0xFF64748B);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(label, style: TextStyle(color: dim, fontSize: 12)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

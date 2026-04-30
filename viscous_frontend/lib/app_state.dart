@@ -133,6 +133,8 @@ class TrackingState {
 
 class TrackingController extends StateNotifier<TrackingState> {
   final LocationService _locationService = LocationService();
+  static const Distance _distance = Distance();
+  static const Duration _pollInterval = Duration(seconds: 12);
 
   TrackingController() : super(_seedState()) {
     _bootstrap();
@@ -149,6 +151,11 @@ class TrackingController extends StateNotifier<TrackingState> {
 
   Timer? _timer;
   bool _inFlight = false;
+  LatLng? _prevGeo;
+  DateTime? _prevGeoTime;
+  double? _clientSmoothedKmh;
+  int _geoSamples = 0;
+  DateTime? _lastUserRefreshAt;
 
   static TrackingState _seedState() {
     final stops = <BusStop>[];
@@ -157,7 +164,7 @@ class TrackingController extends StateNotifier<TrackingState> {
       currentStopIndex: 0,
       nextStopIndex: 0,
       busPosition: const LatLng(0, 0),
-      kmh: 27,
+      kmh: 0,
       delayMinutes: 0,
       routeStarted: false,
       routeCompleted: false,
@@ -174,9 +181,45 @@ class TrackingController extends StateNotifier<TrackingState> {
 
   void _startPolling() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+    _timer = Timer.periodic(_pollInterval, (_) {
       _refreshFromBackend();
     });
+  }
+
+  /// Pull-to-refresh / manual sync. Throttled so rapid gestures do not stack API calls.
+  Future<void> refreshTracking() async {
+    final now = DateTime.now();
+    if (_lastUserRefreshAt != null &&
+        now.difference(_lastUserRefreshAt!) < const Duration(milliseconds: 550)) {
+      return;
+    }
+    _lastUserRefreshAt = now;
+    await _refreshFromBackend();
+  }
+
+  double _computeClientSpeedKmh(LatLng newPos, DateTime now, double? apiSpeedKmh) {
+    if (_prevGeo != null && _prevGeoTime != null) {
+      final dtSec = now.difference(_prevGeoTime!).inMilliseconds / 1000.0;
+      if (dtSec >= 0.35 && dtSec < 180) {
+        final meters = _distance(_prevGeo!, newPos).toDouble();
+        if (meters >= 0 && meters < 3_000) {
+          final instant = (meters / dtSec) * 3.6;
+          if (instant.isFinite && instant <= 130) {
+            _clientSmoothedKmh = _clientSmoothedKmh == null
+                ? instant
+                : _clientSmoothedKmh! * 0.62 + instant * 0.38;
+            _geoSamples++;
+          }
+        }
+      }
+    }
+    _prevGeo = newPos;
+    _prevGeoTime = now;
+
+    if (_geoSamples >= 2 && _clientSmoothedKmh != null) {
+      return _clientSmoothedKmh!.clamp(0.0, 130.0);
+    }
+    return (apiSpeedKmh ?? state.kmh).clamp(0.0, 130.0);
   }
 
   Future<void> _refreshFromBackend() async {
@@ -217,7 +260,10 @@ class TrackingController extends StateNotifier<TrackingState> {
       final status = (data['status'] ?? 'stop').toString().toLowerCase();
       final running = status == 'running';
       final direction = (data['direction'] as num?)?.toInt() == -1 ? -1 : 1;
-      final speedKmh = (data['speedKmh'] as num?)?.toDouble() ?? state.kmh;
+      final apiSpeedKmh = (data['speedKmh'] as num?)?.toDouble();
+      final newPos = LatLng(latitude, longitude);
+      final now = DateTime.now();
+      final speedKmh = _computeClientSpeedKmh(newPos, now, apiSpeedKmh);
       final displayIndex = (data['currentDisplayIndex'] as num?)?.toInt() ??
           currentStopIndex.clamp(0, orderedStops.isEmpty ? 0 : orderedStops.length - 1);
       final routeMeta = data['routeMeta'] is Map<String, dynamic>
@@ -228,7 +274,7 @@ class TrackingController extends StateNotifier<TrackingState> {
         stops: orderedStops.isEmpty ? (stops.isEmpty ? state.stops : stops) : orderedStops,
         currentStopIndex: currentStopIndex.clamp(0, stops.isEmpty ? 0 : stops.length - 1),
         nextStopIndex: nextStopIndex.clamp(0, (orderedStops.isEmpty ? stops : orderedStops).isEmpty ? 0 : (orderedStops.isEmpty ? stops : orderedStops).length - 1),
-        busPosition: LatLng(latitude, longitude),
+        busPosition: newPos,
         kmh: speedKmh,
         routeStarted: data['updatedAt'] != null,
         routeCompleted: false,

@@ -30,8 +30,12 @@ class HomeTab extends ConsumerWidget {
             
             // ── Main scrollable content ───────────────────────────────────
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
+              child: RefreshIndicator(
+                color: theme.colorScheme.primary,
+                onRefresh: () => ref.read(trackingProvider.notifier).refreshTracking(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
                   children: [
                     // Control card
                     Padding(
@@ -125,6 +129,7 @@ class HomeTab extends ConsumerWidget {
                    
                     const SizedBox(height: 100),
                   ],
+                  ),
                 ),
               ),
             ),
@@ -501,25 +506,52 @@ class _HomeHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final accent = const Color(0xFFFFB930);
+    final iconMuted = isDark ? Colors.white : const Color(0xFF1E3A5F);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF002366), // Royal Blue
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        gradient: isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF001845), Color(0xFF002366)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: [Color(0xFFEFF6FF), Color(0xFFDCE9F9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(20),
           bottomRight: Radius.circular(20),
         ),
+        border: isDark
+            ? null
+            : Border.all(color: const Color(0xFFBFDBFE).withValues(alpha: 0.7)),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF002366).withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               tracking.routeMeta?.college.toUpperCase() ?? 'VISCOUS TRACKER',
-              style: const TextStyle(
-                color: Colors.white, 
-                fontSize: 14, 
-                fontWeight: FontWeight.w900, 
-                letterSpacing: 1
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -527,13 +559,13 @@ class _HomeHeader extends ConsumerWidget {
           const Spacer(),
           IconButton(
             onPressed: () {},
-            icon: const Icon(Icons.notifications_active_rounded, color: Color(0xFFFFB930), size: 24),
+            icon: Icon(Icons.notifications_active_rounded, color: accent, size: 24),
           ),
           IconButton(
             onPressed: () {
-              ref.read(currentTabProvider.notifier).state = 2; // Redirect to Profile
+              ref.read(currentTabProvider.notifier).state = 2;
             },
-            icon: const Icon(Icons.account_circle, color: Colors.white, size: 28),
+            icon: Icon(Icons.account_circle, color: iconMuted, size: 28),
           ),
         ],
       ),

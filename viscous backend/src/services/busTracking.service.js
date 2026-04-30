@@ -4,6 +4,8 @@ import { logger } from "../utils/logger.js";
 
 const routeCache = new Map();
 const usersCache = new Map();
+/** routeId -> { payload, cachedAt } — shared across users on the same route (reduces read bursts). */
+const trackingSnapshotCache = new Map();
 let isSyncRunning = false;
 
 const ROUTE_CACHE_TTL_MS = 60_000;
@@ -222,7 +224,22 @@ const shouldWriteRuntime = (previous, next) => {
   return false;
 };
 
-export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
+const buildSnapshotPayload = (runtimeData, routeStops, routeMeta) => {
+  const direction = runtimeData.direction === -1 ? -1 : 1;
+  const orderedStops = buildOrderedStops(routeStops, direction);
+  const currentStopIndex = Number(runtimeData.currentStopIndex ?? 0);
+  const displayIndex = computeDisplayIndex(currentStopIndex, routeStops.length, direction);
+
+  return {
+    ...runtimeData,
+    routeMeta,
+    routeStops,
+    orderedStops,
+    currentDisplayIndex: displayIndex
+  };
+};
+
+const fetchSnapshotBaseFromFirestore = async (routeId) => {
   const runtimeDoc = await firestoreDb.collection("route_runtime").doc(routeId).get();
   const runtimeData = runtimeDoc.exists ? runtimeDoc.data() : {};
   const runtimeStops = Array.isArray(runtimeData.routeStops) ? runtimeData.routeStops : [];
@@ -245,17 +262,25 @@ export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
       college: route.college
     };
   }
-  const direction = runtimeData.direction === -1 ? -1 : 1;
-  const orderedStops = buildOrderedStops(routeStops, direction);
-  const currentStopIndex = Number(runtimeData.currentStopIndex ?? 0);
-  const displayIndex = computeDisplayIndex(currentStopIndex, routeStops.length, direction);
 
+  return buildSnapshotPayload(runtimeData, routeStops, routeMeta);
+};
+
+export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
+  const ttl = env.trackingSnapshotCacheTtlMs;
+  const now = Date.now();
+  const cached = trackingSnapshotCache.get(routeId);
+  let base =
+    cached && now - cached.cachedAt < ttl ? cached.payload : null;
+
+  if (!base) {
+    base = await fetchSnapshotBaseFromFirestore(routeId);
+    trackingSnapshotCache.set(routeId, { payload: base, cachedAt: now });
+  }
+
+  const routeStops = base.routeStops ?? [];
   return {
-    ...runtimeData,
-    routeMeta,
-    routeStops,
-    orderedStops,
-    currentDisplayIndex: displayIndex,
+    ...base,
     userStop,
     userStopIndex: resolveUserStopIndex(routeStops, userStop)
   };
@@ -392,6 +417,7 @@ export const syncConfiguredRoute = async () => {
         { merge: true }
       );
       await batch.commit();
+      trackingSnapshotCache.delete(route.id);
     }
 
     const notificationKey = `${roundTripState.direction}:${roundTripState.currentStopIndex}`;
