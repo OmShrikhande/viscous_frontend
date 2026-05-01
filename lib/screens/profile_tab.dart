@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app_state.dart';
+import '../models/login_response.dart';
+import '../services/profile_service.dart';
+import '../services/storage_service.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────
 const Color _kCyan    = Color(0xFF00D4FF);
@@ -16,8 +19,91 @@ class ProfileTab extends ConsumerStatefulWidget {
 }
 
 class _ProfileTabState extends ConsumerState<ProfileTab> {
-  String _selectedRoute = 'Green Line';
-  final List<String> _routes = ['Green Line', 'Blue Line', 'Orange Line'];
+  final StorageService _storageService = StorageService();
+  final ProfileService _profileService = ProfileService();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _stopController = TextEditingController();
+  User? _user;
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _loading = true);
+    try {
+      final local = await _storageService.getLoginData();
+      if (local?.user != null) {
+        _applyUser(local!.user!);
+      }
+      final remote = await _profileService.getMyProfile();
+      _applyUser(remote);
+      await _storageService.updateStoredUser(remote);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load profile: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _applyUser(User user) {
+    _user = user;
+    _nameController.text = user.name ?? '';
+    _emailController.text = user.email ?? '';
+    _phoneController.text = user.phone ?? '';
+    _stopController.text = user.userstop ?? '';
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _saving = true);
+    try {
+      final updated = await _profileService.updateMyProfile(
+        name: _nameController.text,
+        email: _emailController.text,
+        phone: _phoneController.text,
+        userstop: _stopController.text,
+      );
+      _applyUser(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated successfully')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update profile: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    await _storageService.clearLoginData();
+    ref.read(authStateProvider.notifier).state = false;
+    if (mounted) context.go('/login');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _stopController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +114,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     return Container(
       color: theme.scaffoldBackgroundColor,
       child: SafeArea(
-        child: ListView(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
           padding: EdgeInsets.zero,
           children: [
             // ── Header gradient ───────────────────────────────────────────
@@ -74,14 +162,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Text('Sarah Lee',
+                  Text(_user?.name ?? 'User',
                       style: TextStyle(
                         color: theme.textTheme.bodyLarge?.color, 
                         fontSize: 20, 
                         fontWeight: FontWeight.w800
                       )),
                   const SizedBox(height: 4),
-                  Text('Parent Account  •  Route #42',
+                  Text('${_user?.role ?? "student"}  •  ${_user?.route ?? "no route"}',
                       style: TextStyle(color: textDim, fontSize: 12)),
                 ],
               ),
@@ -92,21 +180,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Section: Family ───────────────────────────────────
-                  const _SectionLabel('FAMILY'),
-                  _InfoCard(
-                    icon: Icons.person_rounded,
-                    iconColor: _kCyan,
-                    title: 'Parent',
-                    subtitle: 'Sarah Lee  •  +91 9000000000',
-                  ),
+                  const _SectionLabel('ACCOUNT'),
+                  _ProfileField(label: 'Name', controller: _nameController),
                   const SizedBox(height: 10),
-                  _InfoCard(
-                    icon: Icons.child_care_rounded,
-                    iconColor: _kAmber,
-                    title: 'Child',
-                    subtitle: 'Ethan Lee  •  Stop: Maple Residency',
-                  ),
+                  _ProfileField(label: 'Email', controller: _emailController),
+                  const SizedBox(height: 10),
+                  _ProfileField(label: 'Phone', controller: _phoneController),
+                  const SizedBox(height: 10),
+                  _ProfileField(label: 'User Stop', controller: _stopController),
 
                   const SizedBox(height: 20),
                   // ── Section: Route ────────────────────────────────────
@@ -137,7 +218,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                               Text('Assigned route',
                                   style: TextStyle(color: textDim, fontSize: 11)),
                               const SizedBox(height: 2),
-                              Text(_selectedRoute,
+                              Text(_user?.route ?? '-',
                                   style: TextStyle(
                                     color: theme.textTheme.bodyLarge?.color, 
                                     fontSize: 14, 
@@ -146,31 +227,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                             ],
                           ),
                         ),
-                        // Route dropdown
-                        PopupMenuButton<String>(
-                          onSelected: (v) => setState(() => _selectedRoute = v),
-                          color: theme.colorScheme.surface,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
-                          icon: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: _kCyan.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _kCyan.withOpacity(0.3)),
-                            ),
-                            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text('Change', style: TextStyle(color: _kCyan, fontSize: 11, fontWeight: FontWeight.w600)),
-                              SizedBox(width: 4),
-                              Icon(Icons.expand_more_rounded, color: _kCyan, size: 14),
-                            ]),
-                          ),
-                          itemBuilder: (_) => _routes.map((r) => PopupMenuItem<String>(
-                                value: r,
-                                child: Text(r, style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 13)),
-                              )).toList(),
-                        ),
+                        Text(_user?.college ?? '-', style: TextStyle(color: textDim, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -219,13 +276,27 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                     subtitle: 'Driver: +91 9000000001  •  School: +91 9000000002',
                   ),
 
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _saving ? null : _saveProfile,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      backgroundColor: _kCyan,
+                      foregroundColor: Colors.black,
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Save Profile'),
+                  ),
+
                   const SizedBox(height: 32),
                   // ── Logout button ─────────────────────────────────────
                   GestureDetector(
-                    onTap: () {
-                      ref.read(authStateProvider.notifier).state = false;
-                      context.go('/login');
-                    },
+                    onTap: _logout,
                     child: Container(
                       width: double.infinity,
                       height: 52,
@@ -252,6 +323,27 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileField extends StatelessWidget {
+  const _ProfileField({required this.label, required this.controller});
+
+  final String label;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: theme.colorScheme.surface,
       ),
     );
   }

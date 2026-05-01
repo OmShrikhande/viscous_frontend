@@ -1,13 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/route_response.dart';
+import 'api_config.dart';
 
 class ApiService {
-  final String baseUrl = dotenv.env['BASE_URL'] ?? 'http://10.0.2.2:3000';
-
   Future<RouteResponse> getRoute(String routeNumber) async {
-    final url = Uri.parse('$baseUrl/api/v1/route/$routeNumber');
+    final url = Uri.parse('${ApiConfig.baseUrl}/api/v1/route/$routeNumber');
     print('API_SERVICE: Fetching route from $url');
 
     try {

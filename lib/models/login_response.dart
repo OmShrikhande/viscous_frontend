@@ -40,6 +40,7 @@ class User {
   final String? role;
   final String? route;
   final String? status;
+  final String? userstop;
 
   User({
     this.id,
@@ -51,6 +52,7 @@ class User {
     this.role,
     this.route,
     this.status,
+    this.userstop,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -64,6 +66,7 @@ class User {
       role: json['role'] as String?,
       route: json['route'] as String?,
       status: json['status'] as String?,
+      userstop: json['userstop'] as String?,
     );
   }
 
@@ -78,6 +81,7 @@ class User {
       'role': role,
       'route': route,
       'status': status,
+      'userstop': userstop,
     };
   }
 }

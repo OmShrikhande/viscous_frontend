@@ -1,26 +1,37 @@
 {
   "project_info": {
-    "project_number": "000000000001",
-    "project_id": "viscous-frontend-placeholder",
-    "storage_bucket": "viscous-frontend-placeholder.appspot.com"
+    "project_number": "118894623740",
+    "firebase_url": "https://route-number-1-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "route-number-1",
+    "storage_bucket": "route-number-1.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000001:android:0000000000000000000001",
+        "mobilesdk_app_id": "1:118894623740:android:9475c8bbddca52ac385079",
         "android_client_info": {
-          "package_name": "com.example.viscous_frontend"
+          "package_name": "com.eistatech.vscous"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "118894623740-ju042708gl655nlnp2iob1nel6sgtjd7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDUMMYKEY0000000000000000000000000"
+          "current_key": "AIzaSyA07T0oE8Nm-wiYwJFODRyRCTYSg8C1qVs"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "118894623740-ju042708gl655nlnp2iob1nel6sgtjd7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

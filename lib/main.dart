@@ -9,6 +9,7 @@ import 'app_state.dart';
 import 'firebase_background.dart';
 import 'screens/app_shell_screen.dart';
 import 'screens/login_screen.dart';
+import 'services/storage_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,17 @@ Future<void> main() async {
     print('[main] Firebase init skipped on this platform: $e');
   }
 
-  runApp(const ProviderScope(child: BusTrackerApp()));
+  final storageService = StorageService();
+  final isLoggedIn = await storageService.isLoggedIn();
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        authStateProvider.overrideWith((ref) => isLoggedIn),
+      ],
+      child: const BusTrackerApp(),
+    ),
+  );
 }
 
 class BusTrackerApp extends ConsumerWidget {

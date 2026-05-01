@@ -97,24 +97,7 @@ class _MapTabState extends ConsumerState<MapTab> {
                   point: tracking.busPosition,
                   width: 50,
                   height: 50,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.directions_bus,
-                      color: Colors.blue,
-                      size: 30,
-                    ),
-                  ),
+                  child: _PulsingBusMarker(isMoving: tracking.isBusRunning),
                 ),
               ],
             ),
@@ -144,9 +127,9 @@ class _MapTabState extends ConsumerState<MapTab> {
                   child: Row(
                     children: [
                       // Speed chip
-                      const _InfoChip(
+                      _InfoChip(
                         icon: Icons.speed_rounded,
-                        value: '27 km/h',
+                        value: '${tracking.kmh.toStringAsFixed(1)} km/h',
                         color: _kCyan,
                       ),
                       const SizedBox(width: 10),

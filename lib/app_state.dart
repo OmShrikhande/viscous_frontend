@@ -3,9 +3,36 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
-import 'models/route_response.dart';
-import 'services/api_service.dart';
-import 'services/storage_service.dart';
+import 'services/location_service.dart';
+
+class RouteMeta {
+  const RouteMeta({
+    required this.id,
+    required this.routeNumber,
+    required this.busId,
+    required this.from,
+    required this.to,
+    required this.college,
+  });
+
+  final String id;
+  final String routeNumber;
+  final String busId;
+  final String from;
+  final String to;
+  final String college;
+
+  factory RouteMeta.fromJson(Map<String, dynamic> json) {
+    return RouteMeta(
+      id: (json['id'] ?? '').toString(),
+      routeNumber: (json['routeNumber'] ?? '').toString(),
+      busId: (json['busId'] ?? '').toString(),
+      from: (json['from'] ?? '').toString(),
+      to: (json['to'] ?? '').toString(),
+      college: (json['college'] ?? '').toString(),
+    );
+  }
+}
 
 class BusStop {
   const BusStop({required this.name, required this.position});
@@ -25,8 +52,14 @@ class TrackingState {
     required this.routeStarted,
     required this.routeCompleted,
     required this.isGpsStale,
+    required this.isBusRunning,
+    required this.busStatus,
+    required this.direction,
+    required this.roundsCompleted,
+    required this.currentDisplayIndex,
     required this.lastUpdated,
-    this.routeData,
+    this.routeMeta,
+    this.progressToNextStop = 0.0,
   });
 
   final List<BusStop> stops;
@@ -38,8 +71,14 @@ class TrackingState {
   final bool routeStarted;
   final bool routeCompleted;
   final bool isGpsStale;
+  final bool isBusRunning;
+  final String busStatus;
+  final int direction;
+  final int roundsCompleted;
+  final int currentDisplayIndex;
   final DateTime lastUpdated;
-  final RouteResponse? routeData;
+  final RouteMeta? routeMeta;
+  final double progressToNextStop;
 
   String get currentStop =>
       stops.isEmpty ? 'Loading...' : stops[currentStopIndex.clamp(0, stops.length - 1)].name;
@@ -60,12 +99,18 @@ class TrackingState {
     bool? routeStarted,
     bool? routeCompleted,
     bool? isGpsStale,
+    bool? isBusRunning,
+    String? busStatus,
+    int? direction,
+    int? roundsCompleted,
+    int? currentDisplayIndex,
     DateTime? lastUpdated,
-    RouteResponse? routeData,
+    RouteMeta? routeMeta,
     List<BusStop>? stops,
+    double? progressToNextStop,
   }) {
     return TrackingState(
-      stops: stops ?? (routeData?.stops.map((s) => BusStop(name: s.name, position: s.position)).toList() ?? this.stops),
+      stops: stops ?? this.stops,
       currentStopIndex: currentStopIndex ?? this.currentStopIndex,
       nextStopIndex: nextStopIndex ?? this.nextStopIndex,
       busPosition: busPosition ?? this.busPosition,
@@ -74,71 +119,36 @@ class TrackingState {
       routeStarted: routeStarted ?? this.routeStarted,
       routeCompleted: routeCompleted ?? this.routeCompleted,
       isGpsStale: isGpsStale ?? this.isGpsStale,
+      isBusRunning: isBusRunning ?? this.isBusRunning,
+      busStatus: busStatus ?? this.busStatus,
+      direction: direction ?? this.direction,
+      roundsCompleted: roundsCompleted ?? this.roundsCompleted,
+      currentDisplayIndex: currentDisplayIndex ?? this.currentDisplayIndex,
       lastUpdated: lastUpdated ?? this.lastUpdated,
-      routeData: routeData ?? this.routeData,
+      routeMeta: routeMeta ?? this.routeMeta,
+      progressToNextStop: progressToNextStop ?? this.progressToNextStop,
     );
   }
 }
 
 class TrackingController extends StateNotifier<TrackingState> {
-  final StorageService _storage = StorageService();
-  final ApiService _api = ApiService();
+  final LocationService _locationService = LocationService();
 
   TrackingController() : super(_seedState()) {
-    _initRoute();
-    _startSimulation();
+    _bootstrap();
   }
 
-  Future<void> _initRoute() async {
+  Future<void> _bootstrap() async {
     try {
-      print('APP_STATE: Starting route initialization...');
-      
-      // 1. Check local storage
-      var routeData = await _storage.getRouteData();
-      
-      if (routeData == null) {
-        print('APP_STATE: No route data in local storage. Fetching from API...');
-        // 2. Fetch from API if not in storage
-        final loginData = await _storage.getLoginData();
-        final routeNumber = loginData?.user?.route;
-        
-        print('APP_STATE: User route number: $routeNumber');
-        
-        if (routeNumber != null) {
-          routeData = await _api.getRoute(routeNumber);
-          print('APP_STATE: Route data fetched from API. Saving to storage...');
-          await _storage.saveRouteData(routeData);
-        } else {
-          print('APP_STATE: Route number is null in login data!');
-        }
-      } else {
-        print('APP_STATE: Found route data in local storage for route: ${routeData.routeNumber}');
-      }
-
-      if (routeData != null) {
-        final stops = routeData.stops
-            .map((s) => BusStop(name: s.name, position: s.position))
-            .toList();
-        
-        print('APP_STATE: Updating state with ${stops.length} stops.');
-        
-        state = state.copyWith(
-          routeData: routeData,
-          stops: stops,
-          busPosition: stops.isNotEmpty ? stops.first.position : state.busPosition,
-        );
-        print('APP_STATE: State update complete. Bus position: ${state.busPosition}');
-      } else {
-        print('APP_STATE: Route data is still null after initialization attempt.');
-      }
+      await _refreshFromBackend();
+      _startPolling();
     } catch (e) {
-      print("APP_STATE: Error initializing route: $e");
       debugPrint("Error initializing route: $e");
     }
   }
 
   Timer? _timer;
-  int _tick = 0;
+  bool _inFlight = false;
 
   static TrackingState _seedState() {
     final stops = <BusStop>[];
@@ -152,38 +162,91 @@ class TrackingController extends StateNotifier<TrackingState> {
       routeStarted: false,
       routeCompleted: false,
       isGpsStale: false,
+      isBusRunning: false,
+      busStatus: "stop",
+      direction: 1,
+      roundsCompleted: 0,
+      currentDisplayIndex: 0,
       lastUpdated: DateTime.now(),
-      routeData: null,
+      routeMeta: null,
     );
   }
 
-  void _startSimulation() {
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (state.stops.isEmpty || state.routeCompleted) return;
-      _tick++;
-
-      final newCurrent = (state.currentStopIndex + 1).clamp(
-        0,
-        state.stops.length - 1,
-      );
-      final newNext = (newCurrent + 1).clamp(0, state.stops.length - 1);
-      final finished = newCurrent >= state.stops.length - 1;
-
-      state = state.copyWith(
-        currentStopIndex: newCurrent,
-        nextStopIndex: newNext,
-        busPosition: state.stops[newCurrent].position,
-        delayMinutes: _tick % 3 == 0 ? 2 : 0,
-        kmh: finished ? 0 : 24 + (_tick % 10),
-        routeCompleted: finished,
-        isGpsStale: _tick % 6 == 0,
-        lastUpdated: DateTime.now(),
-      );
+  void _startPolling() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+      _refreshFromBackend();
     });
   }
 
-  void markRouteDeviation() {
-    state = state.copyWith(delayMinutes: 7, lastUpdated: DateTime.now());
+  Future<void> _refreshFromBackend() async {
+    if (_inFlight) return;
+    _inFlight = true;
+    try {
+      final data = await _locationService.getBusLocation();
+      final routeStopsRaw = (data['routeStops'] as List? ?? []);
+      final orderedStopsRaw = (data['orderedStops'] as List? ?? routeStopsRaw);
+      final stops = routeStopsRaw.map((s) {
+        final coords = (s['coordinates'] as List?) ??
+            [s['latitude'] ?? 0.0, s['longitude'] ?? 0.0];
+        return BusStop(
+          name: (s['name'] ?? '').toString(),
+          position: LatLng(
+            (coords[0] as num).toDouble(),
+            (coords[1] as num).toDouble(),
+          ),
+        );
+      }).toList();
+      final orderedStops = orderedStopsRaw.map((s) {
+        final coords = (s['coordinates'] as List?) ??
+            [s['latitude'] ?? 0.0, s['longitude'] ?? 0.0];
+        return BusStop(
+          name: (s['name'] ?? '').toString(),
+          position: LatLng(
+            (coords[0] as num).toDouble(),
+            (coords[1] as num).toDouble(),
+          ),
+        );
+      }).toList();
+
+      final latitude = (data['latitude'] as num?)?.toDouble() ?? state.busPosition.latitude;
+      final longitude = (data['longitude'] as num?)?.toDouble() ?? state.busPosition.longitude;
+      final currentStopIndex = (data['currentStopIndex'] as num?)?.toInt() ?? 0;
+      final nextStopIndex = (data['nextStopIndex'] as num?)?.toInt() ??
+          (currentStopIndex + 1).clamp(0, orderedStops.isEmpty ? 0 : orderedStops.length - 1);
+      final status = (data['status'] ?? 'stop').toString().toLowerCase();
+      final running = status == 'running';
+      final direction = (data['direction'] as num?)?.toInt() == -1 ? -1 : 1;
+      final speedKmh = (data['speedKmh'] as num?)?.toDouble() ?? state.kmh;
+      final displayIndex = (data['currentDisplayIndex'] as num?)?.toInt() ??
+          currentStopIndex.clamp(0, orderedStops.isEmpty ? 0 : orderedStops.length - 1);
+      final routeMeta = data['routeMeta'] is Map<String, dynamic>
+          ? RouteMeta.fromJson(data['routeMeta'])
+          : state.routeMeta;
+
+      state = state.copyWith(
+        stops: orderedStops.isEmpty ? (stops.isEmpty ? state.stops : stops) : orderedStops,
+        currentStopIndex: currentStopIndex.clamp(0, stops.isEmpty ? 0 : stops.length - 1),
+        nextStopIndex: nextStopIndex.clamp(0, (orderedStops.isEmpty ? stops : orderedStops).isEmpty ? 0 : (orderedStops.isEmpty ? stops : orderedStops).length - 1),
+        busPosition: LatLng(latitude, longitude),
+        kmh: speedKmh,
+        routeStarted: data['updatedAt'] != null,
+        routeCompleted: false,
+        isGpsStale: !running,
+        isBusRunning: running,
+        busStatus: status,
+        direction: direction,
+        roundsCompleted: (data['roundsCompleted'] as num?)?.toInt() ?? state.roundsCompleted,
+        currentDisplayIndex: displayIndex.clamp(0, (orderedStops.isEmpty ? stops : orderedStops).isEmpty ? 0 : (orderedStops.isEmpty ? stops : orderedStops).length - 1),
+        routeMeta: routeMeta,
+        progressToNextStop: 0.0,
+        lastUpdated: DateTime.now(),
+      );
+    } catch (error) {
+      debugPrint('Tracking refresh failed: $error');
+    } finally {
+      _inFlight = false;
+    }
   }
 
   @override

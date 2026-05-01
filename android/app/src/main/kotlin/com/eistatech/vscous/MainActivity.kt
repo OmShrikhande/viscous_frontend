@@ -1,4 +1,4 @@
-package com.example.viscous_frontend
+package com.eistatech.vscous
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

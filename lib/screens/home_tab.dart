@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -59,19 +58,19 @@ class HomeTab extends ConsumerWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('${tracking.routeData?.from ?? "Loading..."}  →  ${tracking.routeData?.to ?? "..."}',
+                                      Text('${tracking.routeMeta?.from ?? "Loading..."}  →  ${tracking.routeMeta?.to ?? "..."}',
                                           style: TextStyle(
                                             color: theme.textTheme.bodyLarge?.color, 
                                             fontWeight: FontWeight.w600, 
                                             fontSize: 13
                                           )),
                                       const SizedBox(height: 2),
-                                      Text('${tracking.routeData?.routeNumber ?? "Route"}  •  ${tracking.routeData?.busId ?? "Bus ID"}',
+                                      Text('${tracking.routeMeta?.routeNumber ?? "Route"}  •  ${tracking.routeMeta?.busId ?? "Bus ID"}',
                                           style: TextStyle(color: textDim, fontSize: 11)),
                                     ],
                                   ),
                                 ),
-                                _LiveBadge(isLive: tracking.routeStarted && !tracking.routeCompleted),
+                                _LiveBadge(isLive: tracking.isBusRunning && !tracking.routeCompleted),
                               ],
                             ),
                             const SizedBox(height: 14),
@@ -99,6 +98,50 @@ class HomeTab extends ConsumerWidget {
                     ),
                     
                    const SizedBox(height: 16),
+
+                   Padding(
+                     padding: const EdgeInsets.symmetric(horizontal: 16),
+                     child: Container(
+                       width: double.infinity,
+                       padding: const EdgeInsets.all(14),
+                       decoration: BoxDecoration(
+                         color: theme.colorScheme.surface,
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                       ),
+                       child: Row(
+                         children: [
+                           const Icon(Icons.flag_rounded, color: _kAmber, size: 18),
+                           const SizedBox(width: 8),
+                           Expanded(
+                             child: Text(
+                               'Current: ${tracking.currentStop}  •  Next: ${tracking.nextStop}',
+                               style: TextStyle(
+                                 color: theme.textTheme.bodyLarge?.color,
+                                 fontSize: 12,
+                                 fontWeight: FontWeight.w600,
+                               ),
+                             ),
+                           ),
+                           Container(
+                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                             decoration: BoxDecoration(
+                               color: (tracking.isBusRunning ? _kGreen : _kAmber).withOpacity(0.12),
+                               borderRadius: BorderRadius.circular(8),
+                             ),
+                             child: Text(
+                               tracking.isBusRunning ? 'RUNNING' : 'STOPPED',
+                               style: TextStyle(
+                                 color: tracking.isBusRunning ? _kGreen : _kAmber,
+                                 fontSize: 10,
+                                 fontWeight: FontWeight.w800,
+                               ),
+                             ),
+                           )
+                         ],
+                       ),
+                     ),
+                   ),
                    
                    // ── Timeline ───────────────────────────────────────────────
                    _TimelineSection(tracking: tracking),
@@ -164,6 +207,7 @@ class _TimelineSection extends StatelessWidget {
         Positioned(
           top: 0,
           bottom: 0,
+          left: (MediaQuery.of(context).size.width / 2) - 10,
           child: Container(
             width: 20, 
             child: CustomPaint(
@@ -172,32 +216,35 @@ class _TimelineSection extends StatelessWidget {
           ),
         ),
         
-        // Stops and Bus
+        // Stops
         Column(
           children: List.generate(tracking.stops.length, (index) {
             final stop       = tracking.stops[index];
-            final isCurrent  = index == tracking.currentStopIndex;
-            final isPast     = index < tracking.currentStopIndex;
+            final isCurrent  = index == tracking.currentDisplayIndex;
+            final isPast     = index < tracking.currentDisplayIndex;
             final isLeft     = index % 2 == 0;
             
-            return Column(
-              children: [
-                _TimelineRow(
-                  stop: stop,
-                  isLeft: isLeft,
-                  isCurrent: isCurrent,
-                  isPast: isPast,
-                  eta: index == tracking.nextStopIndex ? tracking.etaToNextMinutes : null,
-                  tracking: tracking,
-                ),
-                
-                // Show bus between current and next
-                if (isCurrent && !tracking.routeCompleted && tracking.routeStarted)
-                  const _BusOnRoad(),
-              ],
+            return SizedBox(
+              height: 140,
+              child: _TimelineRow(
+                stop: stop,
+                isLeft: isLeft,
+                isCurrent: isCurrent,
+                isPast: isPast,
+                eta: index == tracking.nextStopIndex ? tracking.etaToNextMinutes : null,
+                tracking: tracking,
+              ),
             );
           }),
         ),
+
+        // The Moving Bus (Moved after Column to be on top)
+        if (tracking.stops.isNotEmpty)
+          Positioned(
+            top: (tracking.currentDisplayIndex + tracking.progressToNextStop) * 140.0 + 40,
+            left: (MediaQuery.of(context).size.width / 2) - 25,
+            child: const _BusOnRoad(),
+          ),
       ],
     );
   }
@@ -226,7 +273,8 @@ class _TimelineRow extends StatelessWidget {
     final statusColor = isCurrent ? _kGreen : (isPast ? Colors.blueAccent : textDim);
     
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 32),
+      height: 140,
+      padding: const EdgeInsets.symmetric(vertical: 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -334,7 +382,7 @@ class _StopCard extends StatelessWidget {
                     fontSize: 14, 
                     fontWeight: FontWeight.bold
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                 ),
               ),
               if (isLeft) const Spacer(),
@@ -342,9 +390,7 @@ class _StopCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            tracking.routeData != null 
-                ? 'Arriving at ${tracking.routeData!.stops[tracking.stops.indexOf(stop)].time}'
-                : (eta != null ? 'Bus - $eta min' : 'Scheduled'),
+            eta != null ? 'Bus - $eta min' : 'Scheduled',
             style: TextStyle(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6), fontSize: 12),
           ),
         ],
@@ -399,41 +445,103 @@ class _BusOnRoad extends StatefulWidget {
   State<_BusOnRoad> createState() => _BusOnRoadState();
 }
 
-class _BusOnRoadState extends State<_BusOnRoad> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _BusOnRoadState extends State<_BusOnRoad> {
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
-  }
-  @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(seconds: 2), // Match simulation update interval
+      curve: Curves.linear,
+      child: Container(
+        width: 50,
+        height: 70,
+        decoration: BoxDecoration(
+          color: const Color(0xFF003399), // Deep Navy
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5)),
+            BoxShadow(color: _kGreen.withOpacity(0.3), blurRadius: 15),
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Roof lines
+            Positioned(
+              top: 15,
+              child: Container(width: 30, height: 2, color: Colors.white.withOpacity(0.1)),
+            ),
+            Positioned(
+              top: 35,
+              child: Container(width: 30, height: 2, color: Colors.white.withOpacity(0.1)),
+            ),
+            
+            // Front Windshield
+            Positioned(
+              top: 5,
+              child: Container(
+                width: 40,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.lightBlueAccent.withOpacity(0.6),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                ),
+              ),
+            ),
+            
+            // Bus Icon
+            const Center(
+              child: Icon(
+                Icons.bus_alert_rounded,
+                color: Colors.white70,
+                size: 28,
+              ),
+            ),
+            
+            // Side Mirrors
+            Positioned(
+              top: 8,
+              left: -4,
+              child: Container(width: 4, height: 10, decoration: BoxDecoration(color: const Color(0xFF003399), borderRadius: BorderRadius.circular(2))),
+            ),
+            Positioned(
+              top: 8,
+              right: -4,
+              child: Container(width: 4, height: 10, decoration: BoxDecoration(color: const Color(0xFF003399), borderRadius: BorderRadius.circular(2))),
+            ),
 
+            // Headlights (Glowing)
+            Positioned(
+              bottom: 4,
+              left: 8,
+              child: _GlowingLight(color: Colors.yellowAccent),
+            ),
+            Positioned(
+              bottom: 4,
+              right: 8,
+              child: _GlowingLight(color: Colors.yellowAccent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlowingLight extends StatelessWidget {
+  final Color color;
+  const _GlowingLight({required this.color});
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 80, 
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: _kGreen.withOpacity(0.2 * _controller.value),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.directions_bus_rounded,
-                color: _kGreen,
-                size: 40 + (6 * _controller.value), 
-                shadows: [
-                  Shadow(color: _kGreen.withOpacity(0.8), blurRadius: 15 * _controller.value),
-                ],
-              ),
-            );
-          },
-        ),
+      width: 8,
+      height: 6,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(color: color.withOpacity(0.8), blurRadius: 8, spreadRadius: 2),
+        ],
       ),
     );
   }
@@ -463,7 +571,7 @@ class _HomeHeader extends ConsumerWidget {
         children: [
           Expanded(
             child: Text(
-              tracking.routeData?.college.toUpperCase() ?? 'VISCOUS TRACKER', 
+              tracking.routeMeta?.college.toUpperCase() ?? 'VISCOUS TRACKER',
               style: const TextStyle(
                 color: Colors.white, 
                 fontSize: 14, 
@@ -588,13 +696,15 @@ class _PanelContent extends StatelessWidget {
       return Row(children: [
         _StatChip(label: 'ETA', value: '${tracking.etaToNextMinutes} min', color: _kCyan),
         const SizedBox(width: 10),
-        _StatChip(label: 'Delay', value: tracking.delayMinutes == 0 ? 'On time' : '${tracking.delayMinutes} min', color: tracking.delayMinutes == 0 ? _kGreen : _kAmber),
+        _StatChip(label: 'Bus', value: tracking.isBusRunning ? 'Running' : 'Stopped', color: tracking.isBusRunning ? _kGreen : _kAmber),
       ]);
     } else if (miniTab == 1) {
       return Row(children: [
         const Icon(Icons.admin_panel_settings_rounded, color: _kAmber, size: 16),
         const SizedBox(width: 8),
-        Text('Status: ${tracking.routeData?.status ?? "Initializing..."}', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 12)),
+        Text('Status: ${tracking.busStatus}', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 12)),
+        const SizedBox(width: 8),
+        Text('Dir: ${tracking.direction == 1 ? "ASC" : "DESC"} • Round ${tracking.roundsCompleted}', style: TextStyle(color: textDim, fontSize: 12)),
       ]);
     } else {
       return Row(children: [

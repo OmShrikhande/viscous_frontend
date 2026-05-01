@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/login_response.dart';
+import 'api_config.dart';
 
 class AuthService {
-  final String baseUrl = dotenv.env['BASE_URL'] ?? 'http://localhost:3000';
-
   Future<LoginResponse> login(String phone) async {
-    final url = Uri.parse('$baseUrl/api/v1/auth/login');
+    final url = Uri.parse('${ApiConfig.baseUrl}/api/v1/auth/login');
 
     try {
       final response = await http.post(

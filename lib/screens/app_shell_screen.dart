@@ -2,17 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_state.dart';
+import '../services/push_notification_service.dart';
 import 'home_tab.dart';
 import 'map_tab.dart';
 import 'profile_tab.dart';
 
-class AppShellScreen extends ConsumerWidget {
+class AppShellScreen extends ConsumerStatefulWidget {
   const AppShellScreen({super.key});
 
+  @override
+  ConsumerState<AppShellScreen> createState() => _AppShellScreenState();
+}
+
+class _AppShellScreenState extends ConsumerState<AppShellScreen> {
   static const _tabs = [HomeTab(), MapTab(), ProfileTab()];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushNotificationService.instance.initialize();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final tab = ref.watch(currentTabProvider);
     final theme = Theme.of(context);
 
@@ -52,7 +67,7 @@ class _PremiumNavBar extends StatelessWidget {
         border: Border.all(color: navBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: cyan.withOpacity(isDark ? 0.12 : 0.08),
+            color: cyan.withValues(alpha: isDark ? 0.12 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 6),
           ),
@@ -99,7 +114,7 @@ class _NavItem extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? cyan.withOpacity(0.12) : Colors.transparent,
+          color: isActive ? cyan.withValues(alpha: 0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(

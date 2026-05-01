@@ -1,13 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_config.dart';
 
 class LocationService {
-  final String baseUrl = dotenv.env['BASE_URL'] ?? 'http://localhost:3000';
-
   Future<Map<String, dynamic>> getBusLocation() async {
-    final url = Uri.parse('$baseUrl/api/v1/location/bus-location');
+    final url = Uri.parse('${ApiConfig.baseUrl}/api/v1/location/bus-location');
 
     // Get token from storage
     final prefs = await SharedPreferences.getInstance();

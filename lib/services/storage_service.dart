@@ -16,6 +16,18 @@ class StorageService {
     await prefs.setString(_loginDataKey, jsonEncode(loginResponse.toJson()));
   }
 
+  Future<void> updateStoredUser(User user) async {
+    final existing = await getLoginData();
+    if (existing == null) return;
+    final merged = LoginResponse(
+      success: existing.success,
+      token: existing.token,
+      message: existing.message,
+      user: user,
+    );
+    await saveLoginData(merged);
+  }
+
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_tokenKey);
