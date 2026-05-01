@@ -110,6 +110,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     final theme  = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textDim = isDark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
+    final tracking = ref.watch(trackingProvider);
+    final displayRoute = tracking.routeMeta?.routeNumber ?? _user?.route ?? 'no route';
 
     return Container(
       color: theme.scaffoldBackgroundColor,
@@ -169,7 +171,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                         fontWeight: FontWeight.w800
                       )),
                   const SizedBox(height: 4),
-                  Text('${_user?.role ?? "student"}  •  ${_user?.route ?? "no route"}',
+                  Text('${_user?.role ?? "student"}  •  $displayRoute',
                       style: TextStyle(color: textDim, fontSize: 12)),
                 ],
               ),
@@ -218,16 +220,21 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                               Text('Assigned route',
                                   style: TextStyle(color: textDim, fontSize: 11)),
                               const SizedBox(height: 2),
-                              Text(_user?.route ?? '-',
+                              Text(displayRoute,
                                   style: TextStyle(
                                     color: theme.textTheme.bodyLarge?.color, 
                                     fontSize: 14, 
                                     fontWeight: FontWeight.w700
                                   )),
+                              const SizedBox(height: 4),
+                              Text(_user?.college ?? '-', 
+                                  style: TextStyle(color: textDim, fontSize: 12),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                              ),
                             ],
                           ),
                         ),
-                        Text(_user?.college ?? '-', style: TextStyle(color: textDim, fontSize: 12)),
                       ],
                     ),
                   ),

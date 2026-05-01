@@ -14,7 +14,6 @@ class HomeTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tracking    = ref.watch(trackingProvider);
-    final miniTab     = ref.watch(homeMiniTabProvider);
     final theme       = Theme.of(context);
     final isDark      = theme.brightness == Brightness.dark;
     
@@ -26,9 +25,6 @@ class HomeTab extends ConsumerWidget {
         child: Column(
           children: [
             _HomeHeader(tracking: tracking, textDim: textDim),
-            
-            // ── Search bar ────────────────────────────────────────────────
-            _buildSearchBar(context, textDim),
             
             const SizedBox(height: 10),
             
@@ -72,25 +68,6 @@ class HomeTab extends ConsumerWidget {
                                 ),
                                 _LiveBadge(isLive: tracking.isBusRunning && !tracking.routeCompleted),
                               ],
-                            ),
-                            const SizedBox(height: 14),
-                            _PanelSegmentedBar(
-                              value: miniTab,
-                              textDim: textDim,
-                              onChanged: (v) {
-                                ref.read(homeMiniTabProvider.notifier).state = v;
-                                if (v == 2) ref.read(currentTabProvider.notifier).state = 1;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
-                              child: _PanelContent(
-                                key: ValueKey(miniTab), 
-                                miniTab: miniTab, 
-                                tracking: tracking,
-                                textDim: textDim,
-                              ),
                             ),
                           ],
                         ),
@@ -146,47 +123,13 @@ class HomeTab extends ConsumerWidget {
                    // ── Timeline ───────────────────────────────────────────────
                    _TimelineSection(tracking: tracking),
                    
-                   const SizedBox(height: 100),
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar(BuildContext context, Color textDim) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-        boxShadow: [
-          if (theme.brightness == Brightness.light)
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Row(
-        children: [
-           const Icon(Icons.my_location_rounded, color: Colors.blueAccent, size: 20),
-           const SizedBox(width: 12),
-           Expanded(
-             child: TextField(
-               style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 14),
-               decoration: InputDecoration(
-                 hintText: 'Search Bus Stop...',
-                 hintStyle: TextStyle(color: textDim, fontSize: 14),
-                 border: InputBorder.none,
-               ),
-             ),
-           ),
-           Icon(Icons.search, color: textDim, size: 20),
-        ],
       ),
     );
   }
@@ -242,7 +185,7 @@ class _TimelineSection extends StatelessWidget {
         if (tracking.stops.isNotEmpty)
           Positioned(
             top: (tracking.currentDisplayIndex + tracking.progressToNextStop) * 140.0 + 40,
-            left: (MediaQuery.of(context).size.width / 2) - 25,
+            left: (MediaQuery.of(context).size.width / 2) - 18,
             child: const _BusOnRoad(),
           ),
       ],
@@ -452,15 +395,15 @@ class _BusOnRoadState extends State<_BusOnRoad> {
       duration: const Duration(seconds: 2), // Match simulation update interval
       curve: Curves.linear,
       child: Container(
-        width: 50,
-        height: 70,
+        width: 36,
+        height: 50,
         decoration: BoxDecoration(
           color: const Color(0xFF003399), // Deep Navy
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5)),
-            BoxShadow(color: _kGreen.withOpacity(0.3), blurRadius: 15),
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4)),
+            BoxShadow(color: _kGreen.withOpacity(0.3), blurRadius: 10),
           ],
         ),
         child: Stack(
@@ -468,23 +411,23 @@ class _BusOnRoadState extends State<_BusOnRoad> {
           children: [
             // Roof lines
             Positioned(
-              top: 15,
-              child: Container(width: 30, height: 2, color: Colors.white.withOpacity(0.1)),
+              top: 10,
+              child: Container(width: 20, height: 2, color: Colors.white.withOpacity(0.1)),
             ),
             Positioned(
-              top: 35,
-              child: Container(width: 30, height: 2, color: Colors.white.withOpacity(0.1)),
+              top: 25,
+              child: Container(width: 20, height: 2, color: Colors.white.withOpacity(0.1)),
             ),
             
             // Front Windshield
             Positioned(
-              top: 5,
+              top: 4,
               child: Container(
-                width: 40,
-                height: 12,
+                width: 28,
+                height: 8,
                 decoration: BoxDecoration(
                   color: Colors.lightBlueAccent.withOpacity(0.6),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
                 ),
               ),
             ),
@@ -494,31 +437,31 @@ class _BusOnRoadState extends State<_BusOnRoad> {
               child: Icon(
                 Icons.bus_alert_rounded,
                 color: Colors.white70,
-                size: 28,
+                size: 20,
               ),
             ),
             
             // Side Mirrors
             Positioned(
-              top: 8,
-              left: -4,
-              child: Container(width: 4, height: 10, decoration: BoxDecoration(color: const Color(0xFF003399), borderRadius: BorderRadius.circular(2))),
+              top: 6,
+              left: -3,
+              child: Container(width: 3, height: 8, decoration: BoxDecoration(color: const Color(0xFF003399), borderRadius: BorderRadius.circular(1.5))),
             ),
             Positioned(
-              top: 8,
-              right: -4,
-              child: Container(width: 4, height: 10, decoration: BoxDecoration(color: const Color(0xFF003399), borderRadius: BorderRadius.circular(2))),
+              top: 6,
+              right: -3,
+              child: Container(width: 3, height: 8, decoration: BoxDecoration(color: const Color(0xFF003399), borderRadius: BorderRadius.circular(1.5))),
             ),
 
             // Headlights (Glowing)
             Positioned(
-              bottom: 4,
-              left: 8,
+              bottom: 3,
+              left: 6,
               child: _GlowingLight(color: Colors.yellowAccent),
             ),
             Positioned(
-              bottom: 4,
-              right: 8,
+              bottom: 3,
+              right: 6,
               child: _GlowingLight(color: Colors.yellowAccent),
             ),
           ],
@@ -636,110 +579,6 @@ class _LiveBadgeState extends State<_LiveBadge> with SingleTickerProviderStateMi
   }
 }
 
-class _PanelSegmentedBar extends StatelessWidget {
-  final int value;
-  final Color textDim;
-  final ValueChanged<int> onChanged;
-  const _PanelSegmentedBar({required this.value, required this.textDim, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    const labels = ['ETA', 'Admin', 'Map'];
-    return Container(
-      height: 36,
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor, 
-        borderRadius: BorderRadius.circular(12), 
-        border: Border.all(color: theme.dividerColor.withOpacity(0.1))
-      ),
-      child: Row(
-        children: List.generate(labels.length, (i) {
-          final active = i == value;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: active ? _kCyan.withOpacity(0.18) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Center(
-                  child: Text(labels[i], 
-                    style: TextStyle(
-                      color: active ? _kCyan : textDim, 
-                      fontSize: 12, 
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w500
-                    )),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-class _PanelContent extends StatelessWidget {
-  final int miniTab;
-  final TrackingState tracking;
-  final Color textDim;
-  const _PanelContent({super.key, required this.miniTab, required this.tracking, required this.textDim});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (miniTab == 0) {
-      return Row(children: [
-        _StatChip(label: 'ETA', value: '${tracking.etaToNextMinutes} min', color: _kCyan),
-        const SizedBox(width: 10),
-        _StatChip(label: 'Bus', value: tracking.isBusRunning ? 'Running' : 'Stopped', color: tracking.isBusRunning ? _kGreen : _kAmber),
-      ]);
-    } else if (miniTab == 1) {
-      return Row(children: [
-        const Icon(Icons.admin_panel_settings_rounded, color: _kAmber, size: 16),
-        const SizedBox(width: 8),
-        Text('Status: ${tracking.busStatus}', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 12)),
-        const SizedBox(width: 8),
-        Text('Dir: ${tracking.direction == 1 ? "ASC" : "DESC"} • Round ${tracking.roundsCompleted}', style: TextStyle(color: textDim, fontSize: 12)),
-      ]);
-    } else {
-      return Row(children: [
-        const Icon(Icons.map_rounded, color: _kCyan, size: 16),
-        const SizedBox(width: 8),
-        Text('Switching to live map...', style: TextStyle(color: textDim, fontSize: 12)),
-      ]);
-    }
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  const _StatChip({required this.label, required this.value, required this.color});
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textDim = theme.brightness == Brightness.dark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08), 
-          borderRadius: BorderRadius.circular(10), 
-          border: Border.all(color: color.withOpacity(0.2))
-        ),
-        child: Column(children: [
-          Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w800)),
-          Text(label, style: TextStyle(color: textDim, fontSize: 10)),
-        ]),
-      ),
-    );
-  }
-}
 
 class _GlassCard extends StatelessWidget {
   final Widget child;

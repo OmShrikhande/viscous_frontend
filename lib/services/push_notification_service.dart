@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,7 @@ class PushNotificationService {
   PushNotificationService._();
   static final PushNotificationService instance = PushNotificationService._();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging get _messaging => FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final UserService _userService = UserService();
@@ -27,11 +28,16 @@ class PushNotificationService {
   }
 
   Future<void> _initializeInternal({GlobalKey<ScaffoldMessengerState>? messengerKey}) async {
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidInit);
+    if (Firebase.apps.isEmpty) {
+      debugPrint('[FCM] Firebase is not initialized. Skipping push notification setup.');
+      return;
+    }
+
+    final androidInit = const AndroidInitializationSettings('@mipmap/ic_launcher');
+    final initSettings = InitializationSettings(android: androidInit);
     await _localNotifications.initialize(initSettings);
 
-    const androidChannel = AndroidNotificationChannel(
+    final androidChannel = AndroidNotificationChannel(
       'viscous_default_channel',
       'Viscous updates',
       description: 'Foreground notifications for bus updates',
@@ -113,7 +119,7 @@ class PushNotificationService {
     required String title,
     required String body,
   }) async {
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: AndroidNotificationDetails(
         'viscous_default_channel',
         'Viscous updates',
