@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../app_state.dart';
 
@@ -9,17 +10,41 @@ const Color _kCyan    = Color(0xFF00D4FF);
 const Color _kAmber   = Color(0xFFFFB930);
 const Color _kGreen   = Color(0xFF00E676);
 
-class MapTab extends ConsumerWidget {
+class MapTab extends ConsumerStatefulWidget {
   const MapTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MapTab> createState() => _MapTabState();
+}
+
+class _MapTabState extends ConsumerState<MapTab> {
+  late final MapController _mapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tracking = ref.watch(trackingProvider);
     final theme    = Theme.of(context);
     final isDark   = theme.brightness == Brightness.dark;
     final textDim  = isDark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
-    
-    final points   = tracking.stops.map((s) => s.position).toList();
+
+    // Listen for bus position changes and move the map
+    ref.listen(trackingProvider.select((s) => s.busPosition), (prev, next) {
+      if (next.latitude != 0 && next.longitude != 0) {
+        _mapController.move(next, _mapController.camera.zoom);
+      }
+    });
 
     final String status = tracking.routeCompleted
         ? 'Route complete'
@@ -41,65 +66,55 @@ class MapTab extends ConsumerWidget {
       children: [
         // ── Full-screen map ───────────────────────────────────────────────
         FlutterMap(
+          mapController: _mapController,
           options: MapOptions(
-            initialCenter: tracking.busPosition,
+            initialCenter: tracking.busPosition.latitude == 0 ? const LatLng(21.1458, 79.0882) : tracking.busPosition,
             initialZoom: 14,
           ),
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.viscous_frontend',
-              // Add a slight tile filter for dark mode if desired
-              tileBuilder: isDark ? (context, tileWidget, tile) {
-                return ColorFiltered(
-                  colorFilter: const ColorFilter.matrix([
-                    -0.2126, -0.7152, -0.0722, 0, 255,
-                    -0.2126, -0.7152, -0.0722, 0, 255,
-                    -0.2126, -0.7152, -0.0722, 0, 255,
-                    0, 0, 0, 1, 0,
-                  ]),
-                  child: tileWidget,
-                );
-              } : null,
             ),
-            PolylineLayer(
-              polylines: [
-                Polyline(
-                  points: points,
-                  color: _kCyan.withOpacity(0.8),
-                  strokeWidth: 5,
-                  borderColor: _kCyan.withOpacity(0.3),
-                  borderStrokeWidth: 10,
-                ),
-              ],
-            ),
+            // Removed PolylineLayer to hide route highlights
             MarkerLayer(
               markers: [
                 // Stop markers
                 ...tracking.stops.map(
                   (s) => Marker(
                     point: s.position,
-                    width: 32,
-                    height: 32,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: theme.scaffoldBackgroundColor.withOpacity(0.85),
-                        border: Border.all(color: _kAmber, width: 2),
-                        boxShadow: [
-                          BoxShadow(color: _kAmber.withOpacity(0.4), blurRadius: 8),
-                        ],
-                      ),
-                      child: const Icon(Icons.circle, color: _kAmber, size: 10),
+                    width: 40,
+                    height: 40,
+                    child: const Icon(
+                      Icons.location_on,
+                      color: Colors.red,
+                      size: 40,
                     ),
                   ),
                 ),
                 // Bus marker
                 Marker(
                   point: tracking.busPosition,
-                  width: 56,
-                  height: 56,
-                  child: _PulsingBusMarker(isMoving: tracking.routeStarted && !tracking.routeCompleted),
+                  width: 50,
+                  height: 50,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.directions_bus,
+                      color: Colors.blue,
+                      size: 30,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -187,28 +202,71 @@ class MapTab extends ConsumerWidget {
           ),
         ),
 
+        // ── Zoom Controls ────────────────────────────────────────────────
+        Positioned(
+          bottom: 170,
+          right: 16,
+          child: Column(
+            children: [
+              _MapControlButton(
+                icon: Icons.add_rounded,
+                onTap: () {
+                  _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1);
+                },
+              ),
+              const SizedBox(height: 8),
+              _MapControlButton(
+                icon: Icons.remove_rounded,
+                onTap: () {
+                  _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1);
+                },
+              ),
+            ],
+          ),
+        ),
+
         // ── GPS focus FAB ─────────────────────────────────────────────────
         Positioned(
           bottom: 110,
           right: 16,
-          child: GestureDetector(
-            onTap: () {},
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.colorScheme.surface,
-                border: Border.all(color: _kCyan.withOpacity(0.4)),
-                boxShadow: [
-                  BoxShadow(color: _kCyan.withOpacity(0.2), blurRadius: 12),
-                ],
-              ),
-              child: const Icon(Icons.gps_fixed_rounded, color: _kCyan, size: 20),
-            ),
+          child: _MapControlButton(
+            icon: Icons.gps_fixed_rounded,
+            onTap: () {
+              if (tracking.busPosition.latitude != 0) {
+                _mapController.move(tracking.busPosition, 16);
+              }
+            },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MapControlButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _MapControlButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: theme.colorScheme.surface,
+          border: Border.all(color: _kCyan.withOpacity(0.4)),
+          boxShadow: [
+            BoxShadow(color: _kCyan.withOpacity(0.2), blurRadius: 12),
+          ],
+        ),
+        child: Icon(icon, color: _kCyan, size: 20),
+      ),
     );
   }
 }

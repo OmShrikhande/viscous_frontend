@@ -7,19 +7,18 @@ import '../models/login_response.dart';
 class AuthService {
   final String baseUrl = dotenv.env['BASE_URL'] ?? 'http://localhost:3000';
 
-  Future<LoginResponse> login(String mobile, String password) async {
-    final url = Uri.parse('$baseUrl/api/auth/login');
+  Future<LoginResponse> login(String phone) async {
+    final url = Uri.parse('$baseUrl/api/v1/auth/login');
 
     try {
       final response = await http.post(
         url,
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
         },
-        body: {
-          'mobile': mobile,
-          'password': password,
-        },
+        body: jsonEncode({
+          'phone': phone,
+        }),
       ).timeout(
         const Duration(seconds: 15),
         onTimeout: () {

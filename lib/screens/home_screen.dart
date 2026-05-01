@@ -54,10 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => LoginScreen(
-          onThemeChanged: widget.onThemeChanged,
-          isDarkMode: widget.isDarkMode,
-        ),
+        builder: (context) => const LoginScreen(),
       ),
     );
   }
@@ -68,10 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => LoginScreen(
-            onThemeChanged: widget.onThemeChanged,
-            isDarkMode: widget.isDarkMode,
-          ),
+          builder: (context) => const LoginScreen(),
         ),
       );
     }
@@ -218,7 +212,7 @@ class _HomeViewState extends State<_HomeView> with SingleTickerProviderStateMixi
                 const Text('Welcome Back,', style: TextStyle(color: Colors.white70, fontSize: 16)),
                 const SizedBox(height: 4),
                 Text(
-                  widget.user?.mobile ?? 'Demo User',
+                  widget.user?.name ?? 'Demo User',
                   style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -461,10 +455,14 @@ class _ProfileView extends StatelessWidget {
         children: [
           const CircleAvatar(radius: 50, backgroundColor: Color(0xFF002366), child: Icon(Icons.person, size: 60, color: Colors.white)),
           const SizedBox(height: 16),
-          Text(user?.mobile ?? 'User Name', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+          Text(user?.name ?? 'User Name', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
           const SizedBox(height: 32),
-          _buildItem(context, Icons.phone, 'Mobile', user?.mobile ?? 'N/A'),
+          _buildItem(context, Icons.person, 'Name', user?.name ?? 'N/A'),
+          _buildItem(context, Icons.phone, 'Phone', user?.phone ?? 'N/A'),
           _buildItem(context, Icons.email, 'Email', user?.email ?? 'N/A'),
+          _buildItem(context, Icons.school, 'College', user?.college ?? 'N/A'),
+          _buildItem(context, Icons.route, 'Route', user?.route ?? 'N/A'),
+          _buildItem(context, Icons.badge, 'Role', user?.role ?? 'N/A'),
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 20),

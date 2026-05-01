@@ -59,14 +59,14 @@ class HomeTab extends ConsumerWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Sarah Lee  →  Ethan Lee',
+                                      Text('${tracking.routeData?.from ?? "Loading..."}  →  ${tracking.routeData?.to ?? "..."}',
                                           style: TextStyle(
                                             color: theme.textTheme.bodyLarge?.color, 
                                             fontWeight: FontWeight.w600, 
                                             fontSize: 13
                                           )),
                                       const SizedBox(height: 2),
-                                      Text('Green Line  •  KA-01-BT-204',
+                                      Text('${tracking.routeData?.routeNumber ?? "Route"}  •  ${tracking.routeData?.busId ?? "Bus ID"}',
                                           style: TextStyle(color: textDim, fontSize: 11)),
                                     ],
                                   ),
@@ -188,6 +188,7 @@ class _TimelineSection extends StatelessWidget {
                   isCurrent: isCurrent,
                   isPast: isPast,
                   eta: index == tracking.nextStopIndex ? tracking.etaToNextMinutes : null,
+                  tracking: tracking,
                 ),
                 
                 // Show bus between current and next
@@ -206,12 +207,14 @@ class _TimelineRow extends StatelessWidget {
   final BusStop stop;
   final bool isLeft, isCurrent, isPast;
   final int? eta;
+  final TrackingState tracking;
 
   const _TimelineRow({
     required this.stop,
     required this.isLeft,
     required this.isCurrent,
     required this.isPast,
+    required this.tracking,
     this.eta,
   });
 
@@ -231,7 +234,7 @@ class _TimelineRow extends StatelessWidget {
           Expanded(
             flex: 1,
             child: isLeft 
-              ? _StopCard(stop: stop, isLeft: true, color: statusColor, eta: eta)
+              ? _StopCard(stop: stop, isLeft: true, color: statusColor, eta: eta, tracking: tracking)
               : const SizedBox.shrink(),
           ),
           
@@ -272,7 +275,7 @@ class _TimelineRow extends StatelessWidget {
           Expanded(
             flex: 1,
             child: !isLeft 
-              ? _StopCard(stop: stop, isLeft: false, color: statusColor, eta: eta)
+              ? _StopCard(stop: stop, isLeft: false, color: statusColor, eta: eta, tracking: tracking)
               : const SizedBox.shrink(),
           ),
         ],
@@ -286,11 +289,13 @@ class _StopCard extends StatelessWidget {
   final bool isLeft;
   final Color color;
   final int? eta;
+  final TrackingState tracking;
 
   const _StopCard({
     required this.stop, 
     required this.isLeft, 
     required this.color,
+    required this.tracking,
     this.eta,
   });
 
@@ -337,7 +342,9 @@ class _StopCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            eta != null ? 'Bus 21 - $eta min' : 'Bus 12 - 5 min',
+            tracking.routeData != null 
+                ? 'Arriving at ${tracking.routeData!.stops[tracking.stops.indexOf(stop)].time}'
+                : (eta != null ? 'Bus - $eta min' : 'Scheduled'),
             style: TextStyle(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6), fontSize: 12),
           ),
         ],
@@ -454,14 +461,17 @@ class _HomeHeader extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          const Text(
-            'VISCOUS TRACKER', 
-            style: TextStyle(
-              color: Colors.white, 
-              fontSize: 18, 
-              fontWeight: FontWeight.w900, 
-              letterSpacing: 2
-            )
+          Expanded(
+            child: Text(
+              tracking.routeData?.college.toUpperCase() ?? 'VISCOUS TRACKER', 
+              style: const TextStyle(
+                color: Colors.white, 
+                fontSize: 14, 
+                fontWeight: FontWeight.w900, 
+                letterSpacing: 1
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const Spacer(),
           IconButton(
@@ -584,7 +594,7 @@ class _PanelContent extends StatelessWidget {
       return Row(children: [
         const Icon(Icons.admin_panel_settings_rounded, color: _kAmber, size: 16),
         const SizedBox(width: 8),
-        Text('Admin: Traffic alert on route.', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 12)),
+        Text('Status: ${tracking.routeData?.status ?? "Initializing..."}', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 12)),
       ]);
     } else {
       return Row(children: [

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/login_response.dart';
+import '../models/route_response.dart';
 
 class StorageService {
   static const String _tokenKey = 'auth_token';
@@ -49,5 +50,21 @@ class StorageService {
   Future<bool> getDarkMode() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_isDarkKey) ?? true; // Default to dark mode
+  }
+  static const String _routeDataKey = 'route_data';
+
+  Future<void> saveRouteData(RouteResponse routeData) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_routeDataKey, jsonEncode(routeData.toJson()));
+  }
+
+  Future<RouteResponse?> getRouteData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final routeDataString = prefs.getString(_routeDataKey);
+    if (routeDataString != null) {
+      final routeDataJson = jsonDecode(routeDataString);
+      return RouteResponse.fromJson(routeDataJson);
+    }
+    return null;
   }
 }

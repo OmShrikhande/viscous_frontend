@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app_state.dart';
+import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../models/login_response.dart';
 
@@ -27,8 +28,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with TickerProviderStateMixin {
   final _formKey             = GlobalKey<FormState>();
-  final _mobileController    = TextEditingController();
-  final _passwordController  = TextEditingController();
+  final _phoneController     = TextEditingController();
   final _storageService      = StorageService();
 
   late AnimationController _waveCtrl;
@@ -49,8 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
   @override
   void dispose() {
-    _mobileController.dispose();
-    _passwordController.dispose();
+    _phoneController.dispose();
     _waveCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
@@ -60,23 +59,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (_formKey.currentState == null || !_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final authService = AuthService();
+      final response = await authService.login(_phoneController.text);
 
-    final mockResponse = LoginResponse(
-      success: true,
-      token:   'mock_token_active',
-      user: User(
-        uid:         'DV_9921',
-        mobile:      _mobileController.text.isEmpty ? '9112233445' : _mobileController.text,
-        email:       'demo_user@viscous.app',
-        routeNumber: 42,
-      ),
-      message: 'Direct Login Successful',
-    );
-
-    await _storageService.saveLoginData(mockResponse);
-    ref.read(authStateProvider.notifier).state = true;
-    if (mounted) context.go('/app');
+      await _storageService.saveLoginData(response);
+      ref.read(authStateProvider.notifier).state = true;
+      if (mounted) context.go('/app');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -211,34 +209,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     style: TextStyle(color: _kTextDim, fontSize: 12)),
                 const SizedBox(height: 28),
 
-                // Mobile field
+                // Phone field
                 _buildField(
-                  controller:  _mobileController,
-                  label:       'Mobile Number',
-                  hint:        'Enter your number',
+                  controller:  _phoneController,
+                  label:       'Phone Number',
+                  hint:        'Enter your phone number',
                   icon:        Icons.phone_android_rounded,
                   inputType:   TextInputType.phone,
-                  validator:   (v) => (v == null || v.isEmpty) ? 'Mobile number is required' : null,
-                ),
-                const SizedBox(height: 18),
-
-                // Password field
-                _buildField(
-                  controller:  _passwordController,
-                  label:       'Password',
-                  hint:        '••••••••',
-                  icon:        Icons.lock_rounded,
-                  isPassword:  true,
-                  validator:   (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
-                ),
-                const SizedBox(height: 10),
-
-                // Forgot password
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text('Forgot password?',
-                      style: TextStyle(color: _kCyan.withOpacity(0.7), fontSize: 11,
-                          fontWeight: FontWeight.w600)),
+                  validator:   (v) => (v == null || v.isEmpty) ? 'Phone number is required' : null,
                 ),
                 const SizedBox(height: 28),
 
@@ -270,7 +248,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ? const SizedBox(
                               width: 22, height: 22,
                               child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                          : const Text('CONTINUE',
+                          : const Text('LOGIN',
                               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
                                   letterSpacing: 2, color: Colors.white)),
                     ),

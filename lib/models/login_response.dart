@@ -12,11 +12,10 @@ class LoginResponse {
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] as Map<String, dynamic>?;
     return LoginResponse(
       success: json['success'] as bool? ?? false,
-      token: data?['token'] as String?,
-      user: data?['user'] != null ? User.fromJson(data!['user']) : null,
+      token: json['token'] as String?,
+      user: json['user'] != null ? User.fromJson(json['user']) : null,
       message: json['message'] as String?,
     );
   }
@@ -32,33 +31,53 @@ class LoginResponse {
 }
 
 class User {
-  final String? uid;
+  final String? id;
+  final String? college;
+  final String? createdAt;
   final String? email;
-  final String? mobile;
-  final int? routeNumber;
+  final String? name;
+  final String? phone;
+  final String? role;
+  final String? route;
+  final String? status;
 
   User({
-    this.uid,
+    this.id,
+    this.college,
+    this.createdAt,
     this.email,
-    this.mobile,
-    this.routeNumber,
+    this.name,
+    this.phone,
+    this.role,
+    this.route,
+    this.status,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      uid: json['uid'] as String? ?? json['id']?.toString(),
+      id: json['id'] as String?,
+      college: json['college'] as String?,
+      createdAt: json['createdAt'] as String?,
       email: json['email'] as String?,
-      mobile: json['mobile'] as String?,
-      routeNumber: json['routeNumber'] as int?,
+      name: json['name'] as String?,
+      phone: json['phone'] as String?,
+      role: json['role'] as String?,
+      route: json['route'] as String?,
+      status: json['status'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'uid': uid,
+      'id': id,
+      'college': college,
+      'createdAt': createdAt,
       'email': email,
-      'mobile': mobile,
-      'routeNumber': routeNumber,
+      'name': name,
+      'phone': phone,
+      'role': role,
+      'route': route,
+      'status': status,
     };
   }
 }
