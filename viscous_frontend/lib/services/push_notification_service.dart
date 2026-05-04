@@ -83,6 +83,13 @@ class PushNotificationService {
       }
     }
 
+    try {
+      await _messaging.subscribeToTopic('viscous_broadcast');
+      debugPrint('[FCM] subscribed to topic viscous_broadcast');
+    } catch (e) {
+      debugPrint('[FCM] topic subscribe failed: $e');
+    }
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       final title = message.notification?.title ?? 'Notification';
       final body = message.notification?.body ?? message.data.toString();

@@ -27,7 +27,6 @@ class _AppShellScreenState extends ConsumerState<AppShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ref = this.ref;
     final tab = ref.watch(currentTabProvider);
     final theme = Theme.of(context);
 
@@ -45,21 +44,27 @@ class _AppShellScreenState extends ConsumerState<AppShellScreen> {
 class _PremiumNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
-
   const _PremiumNavBar({required this.currentIndex, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
-    final Color navBg     = isDark ? const Color(0xFF0D1235) : Colors.white;
-    final Color navBorder = isDark ? const Color(0xFF1E2A5A) : const Color(0xFFE2E8F0);
-    final Color cyan      = theme.colorScheme.primary;
-    final Color textDim   = isDark ? const Color(0xFF4A5580) : const Color(0xFF64748B);
+    final primary = theme.colorScheme.primary;
+
+    // Distinct background colours per mode
+    final Color navBg = isDark ? const Color(0xFF0D1235) : Colors.white;
+    final Color navBorder = isDark ? const Color(0xFF1E2A5A) : const Color(0xFFDCE6FA);
+    final Color textDim = isDark ? const Color(0xFF4A5580) : const Color(0xFF94A3B8);
+
+    final items = [
+      (Icons.home_outlined, Icons.home_rounded, 'Home'),
+      (Icons.map_outlined, Icons.map_rounded, 'Live Map'),
+      (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
+    ];
 
     return Container(
-      height: 72,
+      height: 74,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
       decoration: BoxDecoration(
         color: navBg,
@@ -67,19 +72,34 @@ class _PremiumNavBar extends StatelessWidget {
         border: Border.all(color: navBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: cyan.withValues(alpha: isDark ? 0.12 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
+            color: primary.withValues(alpha: isDark ? 0.14 : 0.1),
+            blurRadius: 28,
+            offset: const Offset(0, 8),
           ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _NavItem(icon: Icons.home_outlined,   activeIcon: Icons.home_rounded,        label: 'Home',    index: 0, current: currentIndex, onTap: onTap, cyan: cyan, textDim: textDim),
-          _NavItem(icon: Icons.map_outlined,    activeIcon: Icons.map_rounded,         label: 'Map',     index: 1, current: currentIndex, onTap: onTap, cyan: cyan, textDim: textDim),
-          _NavItem(icon: Icons.person_outline,  activeIcon: Icons.person_rounded,      label: 'Profile', index: 2, current: currentIndex, onTap: onTap, cyan: cyan, textDim: textDim),
-        ],
+        children: List.generate(items.length, (i) {
+          final (inactiveIcon, activeIcon, label) = items[i];
+          return _NavItem(
+            icon: inactiveIcon,
+            activeIcon: activeIcon,
+            label: label,
+            index: i,
+            current: currentIndex,
+            onTap: onTap,
+            primary: primary,
+            textDim: textDim,
+            isDark: isDark,
+          );
+        }),
       ),
     );
   }
@@ -90,7 +110,8 @@ class _NavItem extends StatelessWidget {
   final String label;
   final int index, current;
   final ValueChanged<int> onTap;
-  final Color cyan, textDim;
+  final Color primary, textDim;
+  final bool isDark;
 
   const _NavItem({
     required this.icon,
@@ -99,8 +120,9 @@ class _NavItem extends StatelessWidget {
     required this.index,
     required this.current,
     required this.onTap,
-    required this.cyan,
+    required this.primary,
     required this.textDim,
+    required this.isDark,
   });
 
   @override
@@ -110,29 +132,38 @@ class _NavItem extends StatelessWidget {
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? cyan.withValues(alpha: 0.12) : Colors.transparent,
+          color: isActive ? primary.withValues(alpha: isDark ? 0.14 : 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
+          border: isActive
+              ? Border.all(color: primary.withValues(alpha: isDark ? 0.25 : 0.2))
+              : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? cyan : textDim,
-              size: 22,
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: Icon(
+                isActive ? activeIcon : icon,
+                key: ValueKey(isActive),
+                color: isActive ? primary : textDim,
+                size: 22,
+              ),
             ),
             const SizedBox(height: 3),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 250),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? cyan : textDim,
-                letterSpacing: 0.6,
+                color: isActive ? primary : textDim,
+                letterSpacing: 0.4,
               ),
               child: Text(label),
             ),

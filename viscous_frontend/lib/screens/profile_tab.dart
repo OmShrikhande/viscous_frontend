@@ -7,13 +7,20 @@ import '../models/login_response.dart';
 import '../services/profile_service.dart';
 import '../services/storage_service.dart';
 
-// ─── Constants ────────────────────────────────────────────────────────────
-const Color _kCyan    = Color(0xFF00D4FF);
-const Color _kAmber   = Color(0xFFFFB930);
-const Color _kRed     = Color(0xFFFF4D6D);
+// ─── Theme-resolved helpers ────────────────────────────────────────────────────
+Color _primary(BuildContext ctx) => Theme.of(ctx).colorScheme.primary;
+Color _amber(BuildContext ctx) =>
+    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFFFFB930) : const Color(0xFFD97706);
+Color _red(BuildContext ctx) =>
+    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFFFF4D6D) : const Color(0xFFDC2626);
+Color _green(BuildContext ctx) =>
+    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF00E676) : const Color(0xFF059669);
+Color _textDim(BuildContext ctx) =>
+    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
 
 class ProfileTab extends ConsumerStatefulWidget {
   const ProfileTab({super.key});
+
   @override
   ConsumerState<ProfileTab> createState() => _ProfileTabState();
 }
@@ -39,16 +46,18 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     if (showLoader) setState(() => _loading = true);
     try {
       final local = await _storageService.getLoginData();
-      if (local?.user != null) {
-        _applyUser(local!.user!);
-      }
+      if (local?.user != null) _applyUser(local!.user!);
       final remote = await _profileService.getMyProfile();
       _applyUser(remote);
       await _storageService.updateStoredUser(remote);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load profile: $error')),
+          SnackBar(
+            content: const Text('Failed to load profile.'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     } finally {
@@ -75,21 +84,31 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     setState(() => _saving = true);
     try {
       final updated = await _profileService.updateMyProfile(
-        name: _nameController.text,
-        email: _emailController.text,
-        phone: _phoneController.text,
-        userstop: _stopController.text,
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        userstop: _stopController.text.trim(),
       );
       _applyUser(updated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
+          SnackBar(
+            content: const Text('Profile updated ✓'),
+            backgroundColor: _green(context),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile: $error')),
+          SnackBar(
+            content: const Text('Failed to update profile.'),
+            backgroundColor: _red(context),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     } finally {
@@ -98,6 +117,29 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
   }
 
   Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Sign Out?', style: TextStyle(fontWeight: FontWeight.w800)),
+          content: const Text('You will be returned to the login screen.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancel', style: TextStyle(color: _textDim(ctx))),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Sign Out', style: TextStyle(color: _red(ctx), fontWeight: FontWeight.w700)),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
     await _storageService.clearLoginData();
     ref.read(authStateProvider.notifier).state = false;
     if (mounted) context.go('/login');
@@ -114,278 +156,463 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
+    final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final textDim = isDark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
     final tracking = ref.watch(trackingProvider);
-    final displayRoute = tracking.routeMeta?.routeNumber ?? _user?.route ?? 'no route';
+    final displayRoute = tracking.routeMeta?.routeNumber ?? _user?.route ?? 'No route';
 
     return Container(
       color: theme.scaffoldBackgroundColor,
       child: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
             : RefreshIndicator(
                 color: theme.colorScheme.primary,
                 onRefresh: _onPullRefresh,
                 child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
-          children: [
-            // ── Header gradient ───────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark 
-                    ? [const Color(0xFF0D1940), const Color(0xFF080D22)]
-                    : [const Color(0xFFE2E8F0), const Color(0xFFF8FAFC)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 90,
-                        height: 90,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [_kCyan.withOpacity(0.2), Colors.transparent],
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 76,
-                        height: 76,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: theme.colorScheme.surface,
-                          border: Border.all(color: _kCyan.withOpacity(0.5), width: 2.5),
-                          boxShadow: [
-                            BoxShadow(color: _kCyan.withOpacity(0.25), blurRadius: 20)
-                          ],
-                        ),
-                        child: const Icon(Icons.person_rounded, size: 42, color: _kCyan),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(_user?.name ?? 'User',
-                      style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color, 
-                        fontSize: 20, 
-                        fontWeight: FontWeight.w800
-                      )),
-                  const SizedBox(height: 4),
-                  Text('${_user?.role ?? "student"}  •  $displayRoute',
-                      style: TextStyle(color: textDim, fontSize: 12)),
-                ],
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _SectionLabel('ACCOUNT'),
-                  _ProfileField(label: 'Name', controller: _nameController),
-                  const SizedBox(height: 10),
-                  _ProfileField(label: 'Email', controller: _emailController),
-                  const SizedBox(height: 10),
-                  _ProfileField(label: 'Phone', controller: _phoneController),
-                  const SizedBox(height: 10),
-                  _ProfileField(label: 'User Stop', controller: _stopController),
-
-                  const SizedBox(height: 20),
-                  // ── Section: Route ────────────────────────────────────
-                  const _SectionLabel('ASSIGNED ROUTE'),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // ── Profile header ──────────────────────────────────────
+                    _ProfileHeader(
+                      user: _user,
+                      displayRoute: displayRoute,
+                      isDark: isDark,
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: _kCyan.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.alt_route_rounded, color: _kCyan, size: 20),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Assigned route',
-                                  style: TextStyle(color: textDim, fontSize: 11)),
-                              const SizedBox(height: 2),
-                              Text(displayRoute,
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyLarge?.color, 
-                                    fontSize: 14, 
-                                    fontWeight: FontWeight.w700
-                                  )),
-                              const SizedBox(height: 4),
-                              Text(_user?.college ?? '-', 
-                                  style: TextStyle(color: textDim, fontSize: 12),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
-                  const SizedBox(height: 20),
-                  // ── Section: Preferences & Emergency ─────────────────
-                  const _SectionLabel('PREFERENCES & SETTINGS'),
-                  // Theme switch
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-                    ),
-                    child: SwitchListTile(
-                      title: Text('DARK MODE', 
-                          style: TextStyle(
-                            color: theme.textTheme.bodyLarge?.color, 
-                            fontSize: 13, 
-                            fontWeight: FontWeight.w700
-                          )),
-                      subtitle: Text('Enable deep space appearance', 
-                          style: TextStyle(color: textDim, fontSize: 11)),
-                      secondary: const Icon(Icons.palette_rounded, color: _kCyan, size: 20),
-                      activeColor: _kCyan,
-                      value: ref.watch(themeModeProvider) == ThemeMode.dark,
-                      onChanged: (val) {
-                        ref.read(themeModeProvider.notifier).state = 
-                            val ? ThemeMode.dark : ThemeMode.light;
-                      },
-                    ),
-                  ),
-                  _InfoCard(
-                    icon: Icons.notifications_active_rounded,
-                    iconColor: _kAmber,
-                    title: 'Notification preferences',
-                    subtitle: 'Arrival · Delays · Emergencies · Admin alerts',
-                  ),
-                  const SizedBox(height: 10),
-                  _InfoCard(
-                    icon: Icons.emergency_rounded,
-                    iconColor: _kRed,
-                    title: 'Emergency contacts',
-                    subtitle: 'Driver: +91 9000000001  •  School: +91 9000000002',
-                  ),
-
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _saving ? null : _saveProfile,
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                      backgroundColor: _kCyan,
-                      foregroundColor: Colors.black,
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save Profile'),
-                  ),
-
-                  const SizedBox(height: 32),
-                  // ── Logout button ─────────────────────────────────────
-                  GestureDetector(
-                    onTap: _logout,
-                    child: Container(
-                      width: double.infinity,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: _kRed.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _kRed.withOpacity(0.4)),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.logout_rounded, color: _kRed, size: 18),
-                          SizedBox(width: 10),
-                          Text('SIGN OUT',
-                              style: TextStyle(color: _kRed, fontSize: 14,
-                                  fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                          // ── Account fields ──────────────────────────────
+                          _SectionLabel('ACCOUNT INFO'),
+                          _ProfileField(label: 'Full Name', controller: _nameController,
+                              icon: Icons.person_rounded),
+                          const SizedBox(height: 10),
+                          _ProfileField(label: 'Email Address', controller: _emailController,
+                              icon: Icons.email_rounded, inputType: TextInputType.emailAddress),
+                          const SizedBox(height: 10),
+                          _ProfileField(label: 'Phone Number', controller: _phoneController,
+                              icon: Icons.phone_rounded, inputType: TextInputType.phone),
+                          const SizedBox(height: 10),
+                          _ProfileField(label: 'Bus Stop', controller: _stopController,
+                              icon: Icons.location_on_rounded),
+
+                          const SizedBox(height: 20),
+
+                          // ── Assigned route ──────────────────────────────
+                          _SectionLabel('ASSIGNED ROUTE'),
+                          _InfoCard(
+                            icon: Icons.alt_route_rounded,
+                            iconColor: _primary(context),
+                            title: displayRoute,
+                            subtitle: _user?.college ?? '-',
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // ── Settings ────────────────────────────────────
+                          _SectionLabel('PREFERENCES & SETTINGS'),
+
+                          // Theme selector (System / Light / Dark)
+                          _ThemeSelector(),
+
+                          const SizedBox(height: 10),
+                          _InfoCard(
+                            icon: Icons.notifications_active_rounded,
+                            iconColor: _amber(context),
+                            title: 'Notification preferences',
+                            subtitle: 'Arrival · Delays · Emergencies · Admin alerts',
+                          ),
+                          const SizedBox(height: 10),
+                          _InfoCard(
+                            icon: Icons.emergency_rounded,
+                            iconColor: _red(context),
+                            title: 'Emergency contacts',
+                            subtitle: 'Driver: +91 9000000001  •  School: +91 9000000002',
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // ── Save button ─────────────────────────────────
+                          _SaveButton(saving: _saving, onSave: _saveProfile),
+
+                          const SizedBox(height: 16),
+
+                          // ── Logout button ───────────────────────────────
+                          _LogoutButton(onLogout: _logout),
+
+                          const SizedBox(height: 32),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
       ),
-    ),
     );
   }
 }
 
-class _ProfileField extends StatelessWidget {
-  const _ProfileField({required this.label, required this.controller});
-
-  final String label;
-  final TextEditingController controller;
+// ─── Profile header ────────────────────────────────────────────────────────────
+class _ProfileHeader extends StatelessWidget {
+  final User? user;
+  final String displayRoute;
+  final bool isDark;
+  const _ProfileHeader({required this.user, required this.displayRoute, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: theme.colorScheme.surface,
+    final primary = theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 36),
+      decoration: BoxDecoration(
+        gradient: isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF0D1940), Color(0xFF080D22)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              )
+            : LinearGradient(
+                colors: [const Color(0xFF1D4ED8), const Color(0xFF3B82F6)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primary.withValues(alpha: isDark ? 0.2 : 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.1),
+                ),
+              ),
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.15),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.5),
+                ),
+                child: const Icon(Icons.person_rounded, size: 44, color: Colors.white),
+              ),
+              Positioned(
+                bottom: 4,
+                right: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF00E676) : const Color(0xFF059669),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: isDark ? const Color(0xFF080D22) : const Color(0xFF1D4ED8),
+                        width: 2),
+                  ),
+                  child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            user?.name ?? 'User',
+            style: const TextStyle(
+                color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${user?.role?.toUpperCase() ?? "STUDENT"}  •  $displayRoute',
+            style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7), fontSize: 12, letterSpacing: 0.3),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Theme selector (3-way: System / Light / Dark) ────────────────────────────
+class _ThemeSelector extends ConsumerWidget {
+  const _ThemeSelector();
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10, top: 4, left: 4),
-      child: Text(text,
-          style: const TextStyle(color: _kCyan, fontSize: 10,
-              fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final current = ref.watch(themeModeProvider);
+    final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final options = [
+      (ThemeMode.system, Icons.brightness_auto_rounded, 'System'),
+      (ThemeMode.light, Icons.light_mode_rounded, 'Light'),
+      (ThemeMode.dark, Icons.dark_mode_rounded, 'Dark'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: options.map((opt) {
+          final (mode, icon, label) = opt;
+          final isSelected = current == mode;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => ref.read(themeModeProvider.notifier).state = mode,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? primary.withValues(alpha: 0.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: isSelected
+                      ? Border.all(color: primary.withValues(alpha: 0.3))
+                      : null,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon,
+                        color: isSelected ? primary : _textDim(context), size: 20),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isSelected ? primary : _textDim(context),
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
+// ─── Save button ──────────────────────────────────────────────────────────────
+class _SaveButton extends StatelessWidget {
+  final bool saving;
+  final VoidCallback onSave;
+  const _SaveButton({required this.saving, required this.onSave});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: saving
+              ? null
+              : LinearGradient(
+                  colors: [primary, isDark ? const Color(0xFF0099CC) : const Color(0xFF2563EB)],
+                ),
+          color: saving ? theme.dividerColor : null,
+          boxShadow: saving
+              ? []
+              : [
+                  BoxShadow(
+                    color: primary.withValues(alpha: isDark ? 0.4 : 0.25),
+                    blurRadius: 16,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+        ),
+        child: ElevatedButton(
+          onPressed: saving ? null : onSave,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: saving
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: isDark ? Colors.black : Colors.white,
+                  ),
+                )
+              : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.save_rounded, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'SAVE PROFILE',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                          fontSize: 14),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Logout button ────────────────────────────────────────────────────────────
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback onLogout;
+  const _LogoutButton({required this.onLogout});
+
+  @override
+  Widget build(BuildContext context) {
+    final red = _red(context);
+    return GestureDetector(
+      onTap: onLogout,
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          color: red.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: red.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout_rounded, color: red, size: 18),
+            const SizedBox(width: 10),
+            Text(
+              'SIGN OUT',
+              style: TextStyle(
+                  color: red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Profile field ────────────────────────────────────────────────────────────
+class _ProfileField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final IconData icon;
+  final TextInputType inputType;
+
+  const _ProfileField({
+    required this.label,
+    required this.controller,
+    required this.icon,
+    this.inputType = TextInputType.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    return TextField(
+      controller: controller,
+      keyboardType: inputType,
+      style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 14),
+      cursorColor: primary,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: _textDim(context), fontSize: 13),
+        prefixIcon: Icon(icon, color: primary, size: 19),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        filled: true,
+        fillColor: theme.colorScheme.surface,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: primary, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: theme.dividerColor),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      ),
+    );
+  }
+}
+
+// ─── Section label ────────────────────────────────────────────────────────────
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 4, left: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 14,
+            decoration: BoxDecoration(
+              color: _primary(context),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              color: _primary(context),
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Info card ────────────────────────────────────────────────────────────────
 class _InfoCard extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -402,23 +629,29 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textDim = theme.brightness == Brightness.dark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
-    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+        border: Border.all(color: theme.dividerColor),
+        boxShadow: [
+          if (theme.brightness == Brightness.light)
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: iconColor.withValues(alpha: 0.2)),
             ),
             child: Icon(icon, color: iconColor, size: 20),
           ),
@@ -429,16 +662,16 @@ class _InfoCard extends StatelessWidget {
               children: [
                 Text(title,
                     style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color, 
-                      fontSize: 13, 
-                      fontWeight: FontWeight.w700
-                    )),
+                        color: theme.textTheme.bodyLarge?.color,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 3),
                 Text(subtitle,
-                    style: TextStyle(color: textDim, fontSize: 11)),
+                    style: TextStyle(color: _textDim(context), fontSize: 11)),
               ],
             ),
           ),
+          Icon(Icons.chevron_right_rounded, color: _textDim(context), size: 18),
         ],
       ),
     );

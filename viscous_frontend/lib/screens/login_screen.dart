@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,15 +8,6 @@ import 'package:go_router/go_router.dart';
 import '../app_state.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
-
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const Color _kBg      = Color(0xFF050A1E);
-const Color _kSurface = Color(0xFF0C1230);
-const Color _kBorder  = Color(0xFF1C2B5A);
-const Color _kCyan    = Color(0xFF00D4FF);
-const Color _kAmber   = Color(0xFFFFB930);
-const Color _kText    = Color(0xFFEAF0FF);
-const Color _kTextDim = Color(0xFF4A5D8A);
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,22 +18,24 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with TickerProviderStateMixin {
-  final _formKey             = GlobalKey<FormState>();
-  final _phoneController     = TextEditingController();
-  final _storageService      = StorageService();
+  final _formKey = GlobalKey<FormState>();
+  final _phoneController = TextEditingController();
+  final _storageService = StorageService();
 
   late AnimationController _waveCtrl;
   late AnimationController _fadeCtrl;
-  late Animation<double>   _fadeAnim;
+  late Animation<double> _fadeAnim;
 
-  bool _isLoading       = false;
-  bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _waveCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 12))..repeat();
-    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _waveCtrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 14))
+          ..repeat();
+    _fadeCtrl =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
   }
@@ -55,20 +49,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _login() async {
-    if (_formKey.currentState == null || !_formKey.currentState!.validate()) return;
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
+      return;
+    }
     setState(() => _isLoading = true);
 
     try {
       final authService = AuthService();
-      final response = await authService.login(_phoneController.text);
-
+      final response = await authService.login(_phoneController.text.trim());
       await _storageService.saveLoginData(response);
       ref.read(authStateProvider.notifier).state = true;
       if (mounted) context.go('/app');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e')),
+          SnackBar(
+            content: Text('Login failed. Please check your credentials.'),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     } finally {
@@ -79,29 +79,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // ── Per-mode palette ────────────────────────────────────────────────────
+    final bg = isDark ? const Color(0xFF050A1E) : const Color(0xFFEEF2FF);
+    final surface = isDark ? const Color(0xFF0C1230) : Colors.white;
+    final border = isDark ? const Color(0xFF1C2B5A) : const Color(0xFFBFDBFE);
+    final primary = isDark ? const Color(0xFF00D4FF) : const Color(0xFF1D4ED8);
+    final primaryDim = isDark ? const Color(0xFF0099CC) : const Color(0xFF2563EB);
+    final text = isDark ? const Color(0xFFEAF0FF) : const Color(0xFF1E293B);
+    final textDim = isDark ? const Color(0xFF4A5D8A) : const Color(0xFF64748B);
+    final amber = isDark ? const Color(0xFFFFB930) : const Color(0xFFD97706);
+
+    final waveColors = isDark
+        ? [const Color(0xFF00D4FF), const Color(0xFFFFB930), const Color(0xFF00D4FF)]
+        : [const Color(0xFF1D4ED8), const Color(0xFF2563EB), const Color(0xFF1D4ED8)];
 
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: bg,
       body: Stack(
         children: [
-          // ── Animated wave background ──────────────────────────────────
+          // ── Wave background ───────────────────────────────────────────────
           AnimatedBuilder(
             animation: _waveCtrl,
-            builder: (_, __) => CustomPaint(
-              painter: _WavePainter(_waveCtrl.value),
+            builder: (context, child) => CustomPaint(
+              painter: _WavePainter(_waveCtrl.value, waveColors, isDark),
               size: size,
             ),
           ),
 
-          // ── Scattered glow orbs ───────────────────────────────────────
-          Positioned(top: size.height * 0.08, left: size.width * 0.6,
-            child: _GlowOrb(color: _kCyan, size: 180)),
-          Positioned(top: size.height * 0.55, left: -30,
-            child: _GlowOrb(color: _kAmber, size: 140)),
-          Positioned(top: size.height * 0.35, right: -20,
-            child: _GlowOrb(color: _kCyan, size: 100)),
+          // ── Glow orbs ─────────────────────────────────────────────────────
+          Positioned(
+            top: size.height * 0.06,
+            left: size.width * 0.55,
+            child: _GlowOrb(color: primary, size: 200, opacity: isDark ? 0.12 : 0.08),
+          ),
+          Positioned(
+            top: size.height * 0.52,
+            left: -40,
+            child: _GlowOrb(color: amber, size: 150, opacity: isDark ? 0.10 : 0.07),
+          ),
+          Positioned(
+            top: size.height * 0.33,
+            right: -25,
+            child: _GlowOrb(color: primary, size: 110, opacity: isDark ? 0.08 : 0.06),
+          ),
 
-          // ── Main content ──────────────────────────────────────────────
+          // ── Main content ──────────────────────────────────────────────────
           SafeArea(
             child: FadeTransition(
               opacity: _fadeAnim,
@@ -113,9 +137,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildBranding(),
+                        _buildBranding(isDark, primary, text, textDim, surface, amber),
                         const SizedBox(height: 44),
-                        _buildGlassCard(),
+                        _buildLoginCard(
+                          isDark: isDark,
+                          surface: surface,
+                          border: border,
+                          primary: primary,
+                          primaryDim: primaryDim,
+                          text: text,
+                          textDim: textDim,
+                        ),
                       ],
                     ),
                   ),
@@ -128,94 +160,164 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Branding
-  // ──────────────────────────────────────────────────────────────────────────
-
-  Widget _buildBranding() {
-    return Column(children: [
-      // Icon ring
-      Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [_kCyan.withOpacity(0.18), Colors.transparent],
+  // ─── Branding ───────────────────────────────────────────────────────────────
+  Widget _buildBranding(bool isDark, Color primary, Color text, Color textDim,
+      Color surface, Color amber) {
+    return Column(
+      children: [
+        // Shield + bus icon stack
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 106,
+              height: 106,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [primary.withValues(alpha: 0.2), Colors.transparent],
+                ),
               ),
             ),
-          ),
-          Container(
-            width: 78,
-            height: 78,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _kSurface,
-              border: Border.all(color: _kCyan.withOpacity(0.6), width: 2),
-              boxShadow: [BoxShadow(color: _kCyan.withOpacity(0.35), blurRadius: 28)],
+            Container(
+              width: 82,
+              height: 82,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: surface,
+                border: Border.all(color: primary.withValues(alpha: 0.55), width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: primary.withValues(alpha: isDark ? 0.35 : 0.2),
+                    blurRadius: 28,
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(Icons.shield_rounded, color: primary.withValues(alpha: 0.15), size: 52),
+                  Icon(Icons.directions_bus_rounded, color: primary, size: 38),
+                ],
+              ),
             ),
-            child: const Icon(Icons.directions_bus_rounded, size: 38, color: _kCyan),
-          ),
-        ],
-      ),
-      const SizedBox(height: 20),
-      const Text(
-        'VISCOUS',
-        style: TextStyle(
-          fontSize: 36, fontWeight: FontWeight.w900, color: _kText,
-          letterSpacing: 8,
-          shadows: [Shadow(color: Color(0xFF00D4FF), blurRadius: 16)],
+            // Safety badge
+            Positioned(
+              bottom: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: amber,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: surface, width: 2),
+                ),
+                child: const Icon(Icons.verified_rounded, color: Colors.white, size: 12),
+              ),
+            ),
+          ],
         ),
-      ),
-      const SizedBox(height: 4),
-      const Text(
-        'PARENT BUS TRACKER',
-        style: TextStyle(color: _kTextDim, fontSize: 11, letterSpacing: 3.5,
-            fontWeight: FontWeight.w600),
-      ),
-    ]);
+        const SizedBox(height: 22),
+        Text(
+          'VISCOUS',
+          style: TextStyle(
+            fontSize: 38,
+            fontWeight: FontWeight.w900,
+            color: text,
+            letterSpacing: 9,
+            shadows: [Shadow(color: primary.withValues(alpha: 0.5), blurRadius: 20)],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'SAFE PARENT BUS TRACKER',
+          style: TextStyle(
+            color: textDim,
+            fontSize: 10.5,
+            letterSpacing: 3.2,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Glass login card
-  // ──────────────────────────────────────────────────────────────────────────
-
-  Widget _buildGlassCard() {
+  // ─── Login card ─────────────────────────────────────────────────────────────
+  Widget _buildLoginCard({
+    required bool isDark,
+    required Color surface,
+    required Color border,
+    required Color primary,
+    required Color primaryDim,
+    required Color text,
+    required Color textDim,
+  }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: _kSurface.withOpacity(0.7),
+            color: surface.withValues(alpha: isDark ? 0.72 : 0.9),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: _kCyan.withOpacity(0.18), width: 1.5),
-            boxShadow: [BoxShadow(color: _kCyan.withOpacity(0.06), blurRadius: 40)],
+            border: Border.all(color: border, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: primary.withValues(alpha: isDark ? 0.08 : 0.06),
+                blurRadius: 40,
+              ),
+            ],
           ),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Sign In',
-                    style: TextStyle(color: _kText, fontSize: 22, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                const Text('Welcome back! Please enter your credentials.',
-                    style: TextStyle(color: _kTextDim, fontSize: 12)),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.lock_rounded, color: primary, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sign In',
+                            style: TextStyle(
+                                color: text, fontSize: 20, fontWeight: FontWeight.w800)),
+                        Text('Welcome back — please verify yourself.',
+                            style: TextStyle(color: textDim, fontSize: 11)),
+                      ],
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 28),
 
                 // Phone field
                 _buildField(
-                  controller:  _phoneController,
-                  label:       'Phone Number',
-                  hint:        'Enter your phone number',
-                  icon:        Icons.phone_android_rounded,
-                  inputType:   TextInputType.phone,
-                  validator:   (v) => (v == null || v.isEmpty) ? 'Phone number is required' : null,
+                  label: 'PHONE NUMBER',
+                  hint: 'Enter your registered phone number',
+                  icon: Icons.phone_android_rounded,
+                  controller: _phoneController,
+                  inputType: TextInputType.phone,
+                  primary: primary,
+                  text: text,
+                  textDim: textDim,
+                  border: border,
+                  isDark: isDark,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Phone number is required';
+                    if (!RegExp(r'^\+?[0-9]{7,15}$').hasMatch(v.trim())) {
+                      return 'Enter a valid phone number';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 28),
 
@@ -229,35 +331,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       borderRadius: BorderRadius.circular(16),
                       gradient: LinearGradient(
                         colors: _isLoading
-                            ? [_kCyan.withOpacity(0.4), _kCyan.withOpacity(0.2)]
-                            : [_kCyan, const Color(0xFF0099CC)],
+                            ? [primary.withValues(alpha: 0.4), primary.withValues(alpha: 0.25)]
+                            : [primary, primaryDim],
                       ),
                       boxShadow: _isLoading
                           ? []
-                          : [BoxShadow(color: _kCyan.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 6))],
+                          : [
+                              BoxShadow(
+                                color: primary.withValues(alpha: isDark ? 0.45 : 0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                     ),
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
                       ),
                       child: _isLoading
-                          ? const SizedBox(
-                              width: 22, height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                          : const Text('LOGIN',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                                  letterSpacing: 2, color: Colors.white)),
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: isDark ? Colors.black87 : Colors.white,
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.login_rounded,
+                                    color: Colors.white, size: 18),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'SECURE LOGIN',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.5,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
                 Center(
-                  child: Text('Protected by Viscous Security™',
-                      style: TextStyle(color: _kTextDim.withOpacity(0.5), fontSize: 10)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.security_rounded, size: 12, color: textDim.withValues(alpha: 0.5)),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Protected by Viscous Security™',
+                        style: TextStyle(color: textDim.withValues(alpha: 0.5), fontSize: 10),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -267,63 +404,66 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Input field
-  // ──────────────────────────────────────────────────────────────────────────
-
   Widget _buildField({
-    required TextEditingController controller,
     required String label,
     required String hint,
     required IconData icon,
-    bool isPassword = false,
+    required TextEditingController controller,
+    required Color primary,
+    required Color text,
+    required Color textDim,
+    required Color border,
+    required bool isDark,
     TextInputType inputType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
+    final fillColor = isDark ? const Color(0xFF050A1E).withValues(alpha: 0.6) : const Color(0xFFEFF6FF);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(color: _kTextDim, fontSize: 11,
-                fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+        Text(
+          label,
+          style: TextStyle(
+            color: textDim,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.9,
+          ),
+        ),
         const SizedBox(height: 8),
         TextFormField(
-          controller:    controller,
-          obscureText:   isPassword && _obscurePassword,
-          keyboardType:  inputType,
-          validator:     validator,
-          style: const TextStyle(color: _kText, fontSize: 14),
-          cursorColor:   _kCyan,
+          controller: controller,
+          keyboardType: inputType,
+          validator: validator,
+          style: TextStyle(color: text, fontSize: 14),
+          cursorColor: primary,
           decoration: InputDecoration(
-            hintText:       hint,
-            hintStyle:      TextStyle(color: _kTextDim.withOpacity(0.5), fontSize: 13),
-            prefixIcon:     Icon(icon, color: _kCyan, size: 19),
-            suffixIcon: isPassword
-                ? IconButton(
-                    icon: Icon(
-                        _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                        color: _kTextDim, size: 19),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  )
-                : null,
-            filled:       true,
-            fillColor:    _kBg.withOpacity(0.6),
-            border:       OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _kBorder)),
+            hintText: hint,
+            hintStyle: TextStyle(color: textDim.withValues(alpha: 0.5), fontSize: 13),
+            prefixIcon: Icon(icon, color: primary, size: 19),
+            filled: true,
+            fillColor: fillColor,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: border),
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _kBorder)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: border),
+            ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _kCyan, width: 1.5)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: primary, width: 1.5),
+            ),
             errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFFF4D6D))),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFF4D6D)),
+            ),
             focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFFF4D6D))),
-            errorStyle:     const TextStyle(color: Color(0xFFFF4D6D)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFF4D6D)),
+            ),
+            errorStyle: const TextStyle(color: Color(0xFFFF4D6D)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           ),
         ),
@@ -332,32 +472,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Wave background painter
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─── Wave background painter ──────────────────────────────────────────────────
 class _WavePainter extends CustomPainter {
   final double t;
-  _WavePainter(this.t);
+  final List<Color> colors;
+  final bool isDark;
+  _WavePainter(this.t, this.colors, this.isDark);
 
   @override
   void paint(Canvas canvas, Size size) {
-    _draw(canvas, size, 0.65, 40, t,   const Color(0xFF00D4FF), 0.06);
-    _draw(canvas, size, 0.72, 28, -t,  const Color(0xFFFFB930), 0.04);
-    _draw(canvas, size, 0.80, 18, t*1.3, const Color(0xFF00D4FF), 0.03);
+    _draw(canvas, size, 0.65, 42, t, colors[0], isDark ? 0.06 : 0.05);
+    _draw(canvas, size, 0.72, 30, -t, colors[1], isDark ? 0.04 : 0.04);
+    _draw(canvas, size, 0.80, 20, t * 1.3, colors[2], isDark ? 0.03 : 0.03);
   }
 
   void _draw(Canvas canvas, Size size, double yFactor, double amp, double phase,
       Color color, double opacity) {
     final paint = Paint()
-      ..color = color.withOpacity(opacity)
+      ..color = color.withValues(alpha: opacity)
       ..style = PaintingStyle.fill;
     final path = Path();
     final yBase = size.height * yFactor;
     path.moveTo(0, size.height);
     path.lineTo(0, yBase);
     for (double x = 0; x <= size.width; x++) {
-      final y = yBase + amp * math.sin((x / size.width * 2 * math.pi) + phase * 2 * math.pi);
+      final y = yBase +
+          amp * math.sin((x / size.width * 2 * math.pi) + phase * 2 * math.pi);
       path.lineTo(x, y);
     }
     path.lineTo(size.width, size.height);
@@ -366,26 +506,26 @@ class _WavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _WavePainter old) => old.t != t;
+  bool shouldRepaint(covariant _WavePainter old) =>
+      old.t != t || old.isDark != isDark;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Glow orb
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─── Glow orb ─────────────────────────────────────────────────────────────────
 class _GlowOrb extends StatelessWidget {
   final Color color;
   final double size;
-  const _GlowOrb({required this.color, required this.size});
+  final double opacity;
+  const _GlowOrb({required this.color, required this.size, required this.opacity});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
-          colors: [color.withOpacity(0.12), Colors.transparent],
+          colors: [color.withValues(alpha: opacity), Colors.transparent],
         ),
       ),
     );

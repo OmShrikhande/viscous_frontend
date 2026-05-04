@@ -1,0 +1,13 @@
+{
+  "name": "viscous-notification-functions",
+  "description": "Sends FCM to topic viscous_broadcast when Firestore notification documents are created.",
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.1"
+  },
+  "private": true
+}

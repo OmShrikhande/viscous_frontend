@@ -236,10 +236,10 @@ class _HomeViewState extends State<_HomeView> with SingleTickerProviderStateMixi
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!),
-        boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)] : [],
+        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey[300]!),
+        boxShadow: !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)] : [],
       ),
       child: Row(
         children: [
@@ -304,14 +304,14 @@ class _HomeViewState extends State<_HomeView> with SingleTickerProviderStateMixi
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isActive 
-                ? Colors.greenAccent.withOpacity(0.15) 
-                : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
+                ? Colors.greenAccent.withValues(alpha: 0.15) 
+                : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: isActive ? Colors.greenAccent.withOpacity(0.5) : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!),
+              color: isActive ? Colors.greenAccent.withValues(alpha: 0.5) : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey[300]!),
               width: isActive ? 1.5 : 1,
             ),
-            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)] : [],
+            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)] : [],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,9 +342,9 @@ class BusTimelinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.width == 0) return;
     final centerX = size.width / 2;
-    final roadColor = isDark ? Colors.white.withOpacity(0.08) : Colors.grey[300]!;
+    final roadColor = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[300]!;
     final roadPaint = Paint()..color = roadColor..strokeWidth = 14..style = PaintingStyle.stroke;
-    final dashPaint = Paint()..color = isDark ? Colors.white.withOpacity(0.4) : Colors.grey[400]!..strokeWidth = 2..style = PaintingStyle.stroke;
+    final dashPaint = Paint()..color = isDark ? Colors.white.withValues(alpha: 0.4) : Colors.grey[400]!..strokeWidth = 2..style = PaintingStyle.stroke;
 
     canvas.drawLine(Offset(centerX, 0), Offset(centerX, size.height), roadPaint);
     double currentY = 0;
@@ -361,7 +361,7 @@ class BusTimelinePainter extends CustomPainter {
         fontSize: 38, 
         fontFamily: Icons.directions_bus.fontFamily,
         color: Colors.greenAccent,
-        shadows: [Shadow(color: Colors.greenAccent.withOpacity(0.8), blurRadius: 20 * animation.value)],
+        shadows: [Shadow(color: Colors.greenAccent.withValues(alpha: 0.8), blurRadius: 20 * animation.value)],
       ),
     );
     textPainter.layout();
@@ -372,11 +372,11 @@ class BusTimelinePainter extends CustomPainter {
     for (int i = 0; i < 6; i++) {
         final yPos = 85.0 + (i * 125.0);
         final color = (i == 2) ? Colors.greenAccent : Colors.blueAccent;
-        glowPaint.color = color.withOpacity(0.4 * animation.value);
+        glowPaint.color = color.withValues(alpha: 0.4 * animation.value);
         canvas.drawCircle(Offset(centerX, yPos), 12, glowPaint);
         dotPaint.color = color;
         canvas.drawCircle(Offset(centerX, yPos), 6, dotPaint);
-        final linePaint = Paint()..color = color.withOpacity(0.4)..strokeWidth = 1.5;
+        final linePaint = Paint()..color = color.withValues(alpha: 0.4)..strokeWidth = 1.5;
         final isLeft = i % 2 == 0;
         canvas.drawLine(Offset(centerX, yPos), Offset(isLeft ? centerX - 35 : centerX + 35, yPos), linePaint);
     }
@@ -412,7 +412,7 @@ class _RouteView extends StatelessWidget {
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.white, borderRadius: const BorderRadius.only(topLeft: Radius.circular(15), topRight: Radius.circular(15)), border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!))),
+            decoration: BoxDecoration(color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white, borderRadius: const BorderRadius.only(topLeft: Radius.circular(15), topRight: Radius.circular(15)), border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!))),
             child: Row(children: [Expanded(flex: 3, child: Text('BUS STOP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.white54 : Colors.grey))), Expanded(flex: 2, child: Text('EST. REACH', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.white54 : Colors.grey))), Expanded(flex: 2, child: Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.white54 : Colors.grey)))]),
           ),
           Expanded(
@@ -424,13 +424,13 @@ class _RouteView extends StatelessWidget {
                 bool isPassed = data['status'] == 'PASSED';
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                  decoration: BoxDecoration(color: isCurrent ? Colors.greenAccent.withOpacity(0.1) : Colors.transparent, border: Border(bottom: BorderSide(color: isDark ? Colors.white.withOpacity(0.03) : Colors.grey[50]!))),
-                  child: Row(children: [Expanded(flex: 3, child: Row(children: [Container(width: 4, height: 4, decoration: BoxDecoration(shape: BoxShape.circle, color: data['color'])), const SizedBox(width: 10), Expanded(child: Text(data['stop'], style: TextStyle(fontSize: 13, fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal, color: isPassed ? Colors.grey : (isDark ? Colors.white : Colors.black87))))])), Expanded(flex: 2, child: Text(data['reach'], style: TextStyle(fontSize: 12, color: isPassed ? Colors.grey : (isDark ? Colors.white70 : Colors.black54), fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal))), Expanded(flex: 2, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: data['color'].withOpacity(0.1), borderRadius: BorderRadius.circular(5)), child: Text(data['status'], textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: data['color']))))]),
+                  decoration: BoxDecoration(color: isCurrent ? Colors.greenAccent.withValues(alpha: 0.1) : Colors.transparent, border: Border(bottom: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey[50]!))),
+                  child: Row(children: [Expanded(flex: 3, child: Row(children: [Container(width: 4, height: 4, decoration: BoxDecoration(shape: BoxShape.circle, color: data['color'])), const SizedBox(width: 10), Expanded(child: Text(data['stop'], style: TextStyle(fontSize: 13, fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal, color: isPassed ? Colors.grey : (isDark ? Colors.white : Colors.black87))))])), Expanded(flex: 2, child: Text(data['reach'], style: TextStyle(fontSize: 12, color: isPassed ? Colors.grey : (isDark ? Colors.white70 : Colors.black54), fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal))), Expanded(flex: 2, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: data['color'].withValues(alpha: 0.1), borderRadius: BorderRadius.circular(5)), child: Text(data['status'], textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: data['color']))))]),
                 );
               },
             ),
           ),
-          Container(height: 10, width: double.infinity, decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.02) : Colors.transparent, borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(15), bottomRight: Radius.circular(15)))),
+          Container(height: 10, width: double.infinity, decoration: BoxDecoration(color: isDark ? Colors.white.withValues(alpha: 0.02) : Colors.transparent, borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(15), bottomRight: Radius.circular(15)))),
         ],
       ),
     );
@@ -468,8 +468,8 @@ class _ProfileView extends StatelessWidget {
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!), boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)] : []),
-            child: SwitchListTile(title: const Text('DARK MODE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)), subtitle: const Text('Toggle between dark and light themes', style: TextStyle(fontSize: 11)), secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFE1AD01)), activeColor: const Color(0xFFE1AD01), value: isDarkMode, onChanged: onThemeChanged),
+            decoration: BoxDecoration(color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey[200]!), boxShadow: !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)] : []),
+            child: SwitchListTile(title: const Text('DARK MODE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)), subtitle: const Text('Toggle between dark and light themes', style: TextStyle(fontSize: 11)), secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: const Color(0xFFE1AD01)), activeThumbColor: const Color(0xFFE1AD01), value: isDarkMode, onChanged: onThemeChanged),
           ),
           const SizedBox(height: 40),
           SizedBox(width: double.infinity, height: 55, child: ElevatedButton.icon(onPressed: onLogout, icon: const Icon(Icons.logout), label: const Text('LOGOUT', style: TextStyle(fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), elevation: 0))),

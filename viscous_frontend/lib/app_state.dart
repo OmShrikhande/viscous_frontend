@@ -311,5 +311,5 @@ final trackingProvider =
 
 final homeMiniTabProvider = StateProvider<int>((ref) => 0);
 
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
