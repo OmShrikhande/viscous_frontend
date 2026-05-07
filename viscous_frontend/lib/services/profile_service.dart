@@ -29,9 +29,24 @@ class ProfileService {
     required String email,
     required String phone,
     required String userstop,
+    Map<String, dynamic>? notificationPreferences,
+    Map<String, dynamic>? notificationQuietHours,
   }) async {
     final token = await _storage.getToken();
     if (token == null) throw Exception('Missing auth token');
+
+    final requestBody = <String, dynamic>{
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'userstop': userstop,
+    };
+    if (notificationPreferences != null) {
+      requestBody['notificationPreferences'] = notificationPreferences;
+    }
+    if (notificationQuietHours != null) {
+      requestBody['notificationQuietHours'] = notificationQuietHours;
+    }
 
     final response = await http.patch(
       Uri.parse('${ApiConfig.baseUrl}/api/v1/users/me'),
@@ -39,12 +54,7 @@ class ProfileService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'userstop': userstop,
-      }),
+      body: jsonEncode(requestBody),
     );
 
     final json = jsonDecode(response.body);

@@ -355,33 +355,39 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
   }
 };
 
-const acquireRouteLock = async (routeId) => {
-  const lockRef = firestoreDb.collection("route_sync_locks").doc(routeId);
+/**
+ * Acquires the route's distributed lock AND returns the current runtime data
+ * in a single Firestore transaction. The lock lives on the `route_runtime` doc
+ * itself (no separate `route_sync_locks` collection) — saves one read + one
+ * write per sync cycle vs. the previous design.
+ *
+ * Returns { acquired, runtimeData, runtimeRef } so the caller can reuse the
+ * runtime payload without a second read.
+ */
+const acquireRouteLockAndRuntime = async (routeId) => {
+  const runtimeRef = firestoreDb.collection("route_runtime").doc(routeId);
   const now = Date.now();
-  const lockUntil = now + Math.max(env.scheduler.selfCallIntervalMs + 1_000, 7_000);
+  // Hold the lock just long enough to cover one cycle plus a small buffer.
+  const lockUntilMs = now + Math.max(env.scheduler.selfCallIntervalMs + 1_000, 7_000);
+
   let acquired = false;
+  let runtimeData = {};
 
   await firestoreDb.runTransaction(async (tx) => {
-    const lockDoc = await tx.get(lockRef);
-    const lockData = lockDoc.exists ? lockDoc.data() : null;
-    const currentLockUntil = Number(lockData?.lockUntilMs ?? 0);
-    if (currentLockUntil > now) return;
+    const doc = await tx.get(runtimeRef);
+    const data = doc.exists ? doc.data() : {};
+    const currentLockUntil = Number(data?.lockUntilMs ?? 0);
+    if (currentLockUntil > now) {
+      acquired = false;
+      runtimeData = data;
+      return;
+    }
     acquired = true;
-    tx.set(lockRef, { lockUntilMs: lockUntil, updatedAt: new Date().toISOString() }, { merge: true });
+    runtimeData = data;
+    tx.set(runtimeRef, { lockUntilMs }, { merge: true });
   });
 
-  return acquired;
-};
-
-const releaseRouteLock = async (routeId) => {
-  try {
-    await firestoreDb
-      .collection("route_sync_locks")
-      .doc(routeId)
-      .set({ lockUntilMs: 0, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (error) {
-    logger.error("Failed to release route lock", { routeId, error: error.message });
-  }
+  return { acquired, runtimeData, runtimeRef };
 };
 
 const updateRoundTripState = ({ routeStops, runtimeData, nearestStopIndex, withinRouteArea }) => {
@@ -480,8 +486,10 @@ export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
   }
 
   const routeStops = base.routeStops ?? [];
+  // Strip lock metadata from response — it's an internal field.
+  const { lockUntilMs, ...publicBase } = base;
   return {
-    ...base,
+    ...publicBase,
     userStop,
     userStopIndex: resolveUserStopIndex(routeStops, userStop)
   };
@@ -493,7 +501,7 @@ export const syncConfiguredRoute = async () => {
   }
   isSyncRunning = true;
 
-  let lockedRouteId = null;
+  let acquiredRuntimeRef = null;
   try {
     const routeNumber = env.scheduler.routeNumber;
     if (!routeNumber) {
@@ -512,11 +520,12 @@ export const syncConfiguredRoute = async () => {
       return { skipped: true, reason: "route has no stops" };
     }
 
-    const lockAcquired = await acquireRouteLock(route.id);
-    if (!lockAcquired) {
+    // Single transaction: acquire lock + read runtime data (was 2 separate ops).
+    const { acquired, runtimeData, runtimeRef } = await acquireRouteLockAndRuntime(route.id);
+    if (!acquired) {
       return { skipped: true, reason: "route sync lock busy" };
     }
-    lockedRouteId = route.id;
+    acquiredRuntimeRef = runtimeRef;
 
     const realtimeSnapshot = await realtimeDb.ref(`/${route.busId}`).get();
     const realtimeData = realtimeSnapshot.val();
@@ -530,9 +539,6 @@ export const syncConfiguredRoute = async () => {
       return { skipped: true, reason: "invalid realtime coordinates" };
     }
 
-    const runtimeRef = firestoreDb.collection("route_runtime").doc(route.id);
-    const runtimeDoc = await runtimeRef.get();
-    const runtimeData = runtimeDoc.exists ? runtimeDoc.data() : {};
     const now = Date.now();
 
     const prevLat = Number(runtimeData.latitude ?? latitude);
@@ -548,7 +554,14 @@ export const syncConfiguredRoute = async () => {
     const isRunning = !reachedStaleThreshold;
     const lastUpdatedMs = runtimeData.updatedAt ? new Date(runtimeData.updatedAt).getTime() : now;
     const elapsedSeconds = Math.max((now - lastUpdatedMs) / 1000, 1);
-    const speedKmh = Math.min((movedMeters / elapsedSeconds) * 3.6, 120);
+
+    // Smoothed speed (km/h): blend instantaneous reading with previous so a single
+    // GPS jitter doesn't whip the gauge around.
+    const instantSpeedKmh = Math.min((movedMeters / elapsedSeconds) * 3.6, 120);
+    const prevSpeedKmh = Number(runtimeData.speedKmh ?? 0);
+    const smoothedSpeedKmh = isRunning
+      ? Number((prevSpeedKmh * 0.55 + instantSpeedKmh * 0.45).toFixed(1))
+      : 0;
 
     const nearestStop = routeStops.reduce(
       (acc, stop) => {
@@ -578,6 +591,20 @@ export const syncConfiguredRoute = async () => {
       roundTripState.direction
     );
 
+    // ETA to next stop using current bus position + smoothed speed.
+    // Fallback to a sane minimum (~1 min) so UI never shows 0 while bus is en route.
+    const distanceToNextMeters = nextStop
+      ? distanceMeters(latitude, longitude, nextStop.latitude, nextStop.longitude)
+      : 0;
+    const etaSpeedKmh = Math.max(smoothedSpeedKmh, 8); // assume 8 km/h floor for stop-and-go
+    const etaToNextSeconds =
+      !nextStop || roundTripState.currentStopIndex === roundTripState.nextStopIndex
+        ? 0
+        : Math.round((distanceToNextMeters / 1000) / etaSpeedKmh * 3600);
+    const etaToNextMinutes = etaToNextSeconds === 0
+      ? 0
+      : Math.max(1, Math.min(60, Math.round(etaToNextSeconds / 60)));
+
     const nextPayload = {
       routeId: route.id,
       routeNumber: route.routeNumber,
@@ -586,8 +613,11 @@ export const syncConfiguredRoute = async () => {
       busStatus: isRunning ? "running" : "stop",
       latitude,
       longitude,
-      speedKmh: Number(speedKmh.toFixed(1)),
+      speedKmh: smoothedSpeedKmh,
       nearestStopDistanceMeters: Math.round(nearestStop.meters),
+      distanceToNextStopMeters: Math.round(distanceToNextMeters),
+      etaToNextSeconds,
+      etaToNextMinutes,
       effectiveRouteProximityMeters,
       withinRouteArea,
       direction: roundTripState.direction,
@@ -622,23 +652,14 @@ export const syncConfiguredRoute = async () => {
     nextPayload.confidenceLevel = confidence.level;
     const stationaryAtSameStop = previousStopIndex === roundTripState.currentStopIndex;
 
-    const shouldWrite = shouldWriteRuntime(runtimeData, nextPayload);
-    if (shouldWrite) {
-      const batch = firestoreDb.batch();
-      batch.set(runtimeRef, nextPayload, { merge: true });
-      batch.set(
-        firestoreDb.collection("buses").doc(route.busId),
-        { status: nextPayload.status, updatedAt: nextPayload.updatedAt },
-        { merge: true }
-      );
-      await batch.commit();
-      trackingSnapshotCache.delete(route.id);
-    }
-
+    // ── Run notification logic BEFORE the single batched write so we can fold
+    //    the lastNotifiedKey update into the same Firestore commit. ──
     const notificationKey = `${roundTripState.direction}:${roundTripState.currentStopIndex}`;
     const previousNotificationKey = runtimeData.lastNotifiedKey ?? "";
     const previousBusStatus = String(runtimeData.status ?? runtimeData.busStatus ?? "").toLowerCase();
     const currentBusStatus = nextPayload.status;
+    let notifiedKeyChanged = false;
+
     if (currentBusStatus === "running" && previousBusStatus && previousBusStatus !== "running") {
       const allUsers = await getActiveUsersByRoute(route);
       const notifiableUsers = allUsers.filter((u) =>
@@ -714,7 +735,7 @@ export const syncConfiguredRoute = async () => {
               key: "eta",
               users: eventBuckets.eta,
               title: "Bus is reaching soon",
-              body: `ETA remaining. Bus is near ${nowStop.name}.`
+              body: `ETA ~${etaToNextMinutes || 1} min. Next stop: ${nextStop?.name ?? nowStop.name}.`
             },
             {
               key: "one_stop_away",
@@ -748,7 +769,7 @@ export const syncConfiguredRoute = async () => {
         attemptedTokensTotal += result.attemptedTokens;
       }
 
-      await runtimeRef.set({ lastNotifiedKey: notificationKey }, { merge: true });
+      notifiedKeyChanged = true;
       logger.info("Stop notification cycle processed", {
         routeId: route.id,
         stopIndex,
@@ -758,12 +779,40 @@ export const syncConfiguredRoute = async () => {
         successCount: sentSuccessTotal,
         failureCount: sentFailureTotal
       });
-    } else if (withinRouteArea) {
-      logger.info("Notification skipped - already sent for stop+direction", {
-        routeId: route.id,
-        key: notificationKey
-      });
     }
+
+    // ── Single combined write per cycle: state + lock release + (optional)
+    //    bus status doc + (optional) lastNotifiedKey. ──
+    const shouldWriteState = shouldWriteRuntime(runtimeData, nextPayload);
+    const statusChanged = previousBusStatus !== currentBusStatus;
+    const writePayload = {
+      lockUntilMs: 0 // always release lock
+    };
+    if (shouldWriteState) {
+      Object.assign(writePayload, nextPayload);
+    }
+    if (notifiedKeyChanged) {
+      writePayload.lastNotifiedKey = notificationKey;
+    }
+
+    // Always at least 1 write to release the lock; coalesces with state when present.
+    if (statusChanged) {
+      // Only touch buses/{busId} when status actually flipped (was: every cycle).
+      const batch = firestoreDb.batch();
+      batch.set(runtimeRef, writePayload, { merge: true });
+      batch.set(
+        firestoreDb.collection("buses").doc(route.busId),
+        { status: nextPayload.status, updatedAt: nextPayload.updatedAt },
+        { merge: true }
+      );
+      await batch.commit();
+    } else {
+      await runtimeRef.set(writePayload, { merge: true });
+    }
+    if (shouldWriteState || notifiedKeyChanged) {
+      trackingSnapshotCache.delete(route.id);
+    }
+    acquiredRuntimeRef = null; // already released above
 
     const shouldUseIdleCooldown =
       !hasMoved &&
@@ -782,8 +831,13 @@ export const syncConfiguredRoute = async () => {
       cooldownMs: shouldUseIdleCooldown ? env.scheduler.idlePollingCooldownMs : 0
     };
   } finally {
-    if (lockedRouteId) {
-      await releaseRouteLock(lockedRouteId);
+    // Best-effort lock release if we crashed mid-cycle.
+    if (acquiredRuntimeRef) {
+      try {
+        await acquiredRuntimeRef.set({ lockUntilMs: 0 }, { merge: true });
+      } catch (error) {
+        logger.error("Failed to release route lock after error", { error: error.message });
+      }
     }
     isSyncRunning = false;
   }

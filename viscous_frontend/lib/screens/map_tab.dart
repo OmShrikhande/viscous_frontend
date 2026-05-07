@@ -8,12 +8,19 @@ import 'package:latlong2/latlong.dart';
 import '../app_state.dart';
 
 // ─── Theme-resolved helpers (same convention as home_tab) ─────────────────────
-Color _amber(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFFFFB930) : const Color(0xFFD97706);
-Color _green(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF00E676) : const Color(0xFF059669);
-Color _textDim(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
+Color _amber(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFFFFB930)
+    : const Color(0xFFD97706);
+Color _green(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFF00E676)
+    : const Color(0xFF059669);
+Color _textDim(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFF5A6A90)
+    : const Color(0xFF64748B);
+
+// Stop marker red — the user explicitly asked for red instead of light blue.
+const Color _stopRed = Color(0xFFE11D48);
+const Color _stopRedDark = Color(0xFFB91C1C);
 
 class MapTab extends ConsumerStatefulWidget {
   const MapTab({super.key});
@@ -63,31 +70,59 @@ class _MapTabState extends ConsumerState<MapTab> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.12,
+                        ),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.directions_bus_rounded,
-                          color: theme.colorScheme.primary, size: 20),
+                      child: Icon(
+                        Icons.directions_bus_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
-                    Text('Bus Details',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    Text(
+                      'Bus Details',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                _BusDetailRow(label: 'Bus ID', value: t.routeMeta?.busId ?? '—'),
-                _BusDetailRow(label: 'Route', value: t.routeMeta?.routeNumber ?? '—'),
                 _BusDetailRow(
-                    label: 'Path',
-                    value: '${t.routeMeta?.from ?? "—"} → ${t.routeMeta?.to ?? "—"}'),
+                  label: 'Bus ID',
+                  value: t.routeMeta?.busId ?? '—',
+                ),
                 _BusDetailRow(
-                    label: 'Speed',
-                    value: '${t.kmh.toStringAsFixed(1)} km/h (app estimate)'),
+                  label: 'Route',
+                  value: t.routeMeta?.routeNumber ?? '—',
+                ),
                 _BusDetailRow(
-                    label: 'Status', value: t.isBusRunning ? 'Running' : 'Stopped / Idle'),
+                  label: 'Path',
+                  value:
+                      '${t.routeMeta?.from ?? "—"} → ${t.routeMeta?.to ?? "—"}',
+                ),
+                _BusDetailRow(
+                  label: 'Speed',
+                  value: '${t.kmh.toStringAsFixed(1)} km/h (app estimate)',
+                ),
+                _BusDetailRow(
+                  label: 'Status',
+                  value: t.isBusRunning ? 'Running' : 'Stopped / Idle',
+                ),
                 _BusDetailRow(label: 'Direction', value: dirLabel),
                 _BusDetailRow(label: 'Next Stop', value: t.nextStop),
-                _BusDetailRow(label: 'GPS', value: t.isGpsStale ? 'Stale ⚠' : 'Live ✓'),
+                _BusDetailRow(
+                  label: 'GPS',
+                  value: t.isGpsStale ? 'Stale ⚠' : 'Live ✓',
+                ),
+                _BusDetailRow(
+                  label: 'Confidence',
+                  value:
+                      '${t.confidenceScore}% (${t.confidenceLevel.toUpperCase()})',
+                ),
               ],
             ),
           ),
@@ -114,18 +149,18 @@ class _MapTabState extends ConsumerState<MapTab> {
     final String status = tracking.routeCompleted
         ? 'Route Complete'
         : !tracking.routeStarted
-            ? 'Waiting for Route'
-            : tracking.isGpsStale
-                ? 'GPS Stale'
-                : 'Live Tracking';
+        ? 'Waiting for Route'
+        : tracking.isGpsStale
+        ? 'GPS Stale'
+        : 'Live Tracking';
 
     final Color statusColor = tracking.routeCompleted
         ? _amber(context)
         : !tracking.routeStarted
-            ? _textDim(context)
-            : tracking.isGpsStale
-                ? _amber(context)
-                : _green(context);
+        ? _textDim(context)
+        : tracking.isGpsStale
+        ? _amber(context)
+        : _green(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -134,7 +169,8 @@ class _MapTabState extends ConsumerState<MapTab> {
             : MediaQuery.sizeOf(context).height;
         return RefreshIndicator(
           color: theme.colorScheme.primary,
-          onRefresh: () => ref.read(trackingProvider.notifier).refreshTracking(),
+          onRefresh: () =>
+              ref.read(trackingProvider.notifier).refreshTracking(),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: SizedBox(
@@ -152,7 +188,8 @@ class _MapTabState extends ConsumerState<MapTab> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.viscous.busTracker',
                       ),
                       MarkerLayer(
@@ -166,50 +203,16 @@ class _MapTabState extends ConsumerState<MapTab> {
                               child: _StopPin(isDark: isDark),
                             ),
                           ),
-                          // Bus marker
+                          // Bus marker (speed is shown in the bottom speed bar)
                           Marker(
                             point: tracking.busPosition,
                             width: 60,
-                            height: 68,
+                            height: 60,
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _showBusDetails(tracking),
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                alignment: Alignment.center,
-                                children: [
-                                  _PulsingBusMarker(isMoving: tracking.isBusRunning),
-                                  // Speed label beneath marker
-                                  Positioned(
-                                    bottom: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: theme.colorScheme.primary.withValues(alpha: 0.35),
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.1),
-                                            blurRadius: 6,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        '${tracking.kmh.round()} km/h',
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? const Color(0xFF00D4FF)
-                                              : const Color(0xFF1D4ED8),
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              child: _PulsingBusMarker(
+                                isMoving: tracking.isBusRunning,
                               ),
                             ),
                           ),
@@ -228,18 +231,25 @@ class _MapTabState extends ConsumerState<MapTab> {
                             child: Row(
                               children: [
                                 _InfoChip(
-                                  icon: Icons.speed_rounded,
-                                  value: '${tracking.kmh.toStringAsFixed(1)} km/h',
-                                  color: theme.colorScheme.primary,
+                                  icon: Icons.schedule_rounded,
+                                  value: tracking.etaLabel,
+                                  color: _amber(context),
                                 ),
                                 const SizedBox(width: 12),
                                 _InfoChip(
-                                  icon: Icons.schedule_rounded,
-                                  value: '${tracking.etaToNextMinutes} min',
-                                  color: _amber(context),
+                                  icon: Icons.verified_rounded,
+                                  value: '${tracking.confidenceScore}%',
+                                  color: tracking.confidenceLevel == 'high'
+                                      ? _green(context)
+                                      : tracking.confidenceLevel == 'medium'
+                                      ? _amber(context)
+                                      : _textDim(context),
                                 ),
                                 const Spacer(),
-                                _StatusBadge(status: status, color: statusColor),
+                                _StatusBadge(
+                                  status: status,
+                                  color: statusColor,
+                                ),
                               ],
                             ),
                           ),
@@ -247,24 +257,47 @@ class _MapTabState extends ConsumerState<MapTab> {
                         Padding(
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                           child: _MapCard(
-                            child: Row(children: [
-                              Icon(Icons.location_on_rounded,
-                                  color: theme.colorScheme.primary, size: 15),
-                              const SizedBox(width: 8),
-                              Text('Next stop:  ',
-                                  style: TextStyle(color: _textDim(context), fontSize: 11)),
-                              Expanded(
-                                child: Text(
-                                  tracking.nextStop,
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyLarge?.color,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_rounded,
+                                  color: _stopRed,
+                                  size: 15,
                                 ),
-                              ),
-                            ]),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Next stop:  ',
+                                  style: TextStyle(
+                                    color: _textDim(context),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    tracking.nextStop,
+                                    style: TextStyle(
+                                      color: theme.textTheme.bodyLarge?.color,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (tracking.distanceToNextMeters > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _formatDistance(
+                                      tracking.distanceToNextMeters,
+                                    ),
+                                    style: TextStyle(
+                                      color: _textDim(context),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -273,28 +306,32 @@ class _MapTabState extends ConsumerState<MapTab> {
 
                   // ── Map controls ────────────────────────────────────────
                   Positioned(
-                    bottom: 170,
+                    bottom: 200,
                     right: 16,
                     child: Column(
                       children: [
                         _MapControlButton(
                           icon: Icons.add_rounded,
                           onTap: () => _mapController.move(
-                              _mapController.camera.center, _mapController.camera.zoom + 1),
+                            _mapController.camera.center,
+                            _mapController.camera.zoom + 1,
+                          ),
                           theme: theme,
                         ),
                         const SizedBox(height: 8),
                         _MapControlButton(
                           icon: Icons.remove_rounded,
                           onTap: () => _mapController.move(
-                              _mapController.camera.center, _mapController.camera.zoom - 1),
+                            _mapController.camera.center,
+                            _mapController.camera.zoom - 1,
+                          ),
                           theme: theme,
                         ),
                       ],
                     ),
                   ),
                   Positioned(
-                    bottom: 110,
+                    bottom: 140,
                     right: 16,
                     child: _MapControlButton(
                       icon: Icons.gps_fixed_rounded,
@@ -304,6 +341,19 @@ class _MapTabState extends ConsumerState<MapTab> {
                         }
                       },
                       theme: theme,
+                    ),
+                  ),
+
+                  // ── Bottom speed bar (backend-computed speed) ───────────
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 16,
+                    child: _SpeedBottomBar(
+                      kmh: tracking.kmh,
+                      isMoving: tracking.isBusRunning,
+                      etaLabel: tracking.etaLabel,
+                      nextStop: tracking.nextStop,
                     ),
                   ),
                 ],
@@ -316,6 +366,12 @@ class _MapTabState extends ConsumerState<MapTab> {
   }
 }
 
+String _formatDistance(int meters) {
+  if (meters < 1000) return '$meters m';
+  final km = meters / 1000;
+  return '${km.toStringAsFixed(km >= 10 ? 0 : 1)} km';
+}
+
 // ─── Stop pin ─────────────────────────────────────────────────────────────────
 class _StopPin extends StatelessWidget {
   final bool isDark;
@@ -323,7 +379,7 @@ class _StopPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final pinColor = isDark ? _stopRed : _stopRedDark;
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -332,11 +388,14 @@ class _StopPin extends StatelessWidget {
           height: 32,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: primary.withValues(alpha: 0.15),
-            border: Border.all(color: primary.withValues(alpha: 0.5), width: 1.5),
+            color: pinColor.withValues(alpha: 0.18),
+            border: Border.all(
+              color: pinColor.withValues(alpha: 0.55),
+              width: 1.5,
+            ),
           ),
         ),
-        Icon(Icons.location_on_rounded, color: primary, size: 28),
+        Icon(Icons.location_on_rounded, color: pinColor, size: 28),
       ],
     );
   }
@@ -359,11 +418,14 @@ class _PulsingBusMarkerState extends State<_PulsingBusMarker>
   @override
   void initState() {
     super.initState();
-    _ctrl =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-          ..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.85, end: 1.15)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(
+      begin: 0.85,
+      end: 1.15,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -388,9 +450,13 @@ class _PulsingBusMarkerState extends State<_PulsingBusMarker>
                   height: 56,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.12 * _ctrl.value),
+                    color: const Color(
+                      0xFFF59E0B,
+                    ).withValues(alpha: 0.12 * _ctrl.value),
                     border: Border.all(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.3 * _ctrl.value),
+                      color: const Color(
+                        0xFFF59E0B,
+                      ).withValues(alpha: 0.3 * _ctrl.value),
                       width: 1.5,
                     ),
                   ),
@@ -458,7 +524,8 @@ class _BusSidePainter extends CustomPainter {
     );
 
     // Windows row
-    final winPaint = Paint()..color = const Color(0xFF93C5FD).withValues(alpha: 0.85);
+    final winPaint = Paint()
+      ..color = const Color(0xFF93C5FD).withValues(alpha: 0.85);
     for (var i = 0; i < 4; i++) {
       canvas.drawRRect(
         RRect.fromRectAndCorners(
@@ -500,7 +567,11 @@ class _BusSidePainter extends CustomPainter {
       ..color = const Color(0xFFFEF08A).withValues(alpha: 0.4 + 0.3 * anim)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 + 2 * anim);
     canvas.drawCircle(Offset(w * 0.04, h * 0.65), 3.5, hGlow);
-    canvas.drawCircle(Offset(w * 0.04, h * 0.65), 2, Paint()..color = const Color(0xFFFEF08A));
+    canvas.drawCircle(
+      Offset(w * 0.04, h * 0.65),
+      2,
+      Paint()..color = const Color(0xFFFEF08A),
+    );
 
     // Rear tail light
     canvas.drawRRect(
@@ -519,17 +590,178 @@ class _BusSidePainter extends CustomPainter {
     canvas.drawCircle(
       Offset(w * 0.3, 3),
       2.5,
-      Paint()..color = const Color(0xFFEF4444).withValues(alpha: 0.5 + 0.5 * anim),
+      Paint()
+        ..color = const Color(0xFFEF4444).withValues(alpha: 0.5 + 0.5 * anim),
     );
     canvas.drawCircle(
       Offset(w * 0.55, 3),
       2.5,
-      Paint()..color = const Color(0xFF60A5FA).withValues(alpha: 0.5 + 0.5 * (1 - anim)),
+      Paint()
+        ..color = const Color(
+          0xFF60A5FA,
+        ).withValues(alpha: 0.5 + 0.5 * (1 - anim)),
     );
   }
 
   @override
   bool shouldRepaint(covariant _BusSidePainter old) => old.anim != anim;
+}
+
+// ─── Bottom speed bar — prominent, glanceable speed for the driver/parent ───
+class _SpeedBottomBar extends StatelessWidget {
+  final double kmh;
+  final bool isMoving;
+  final String etaLabel;
+  final String nextStop;
+
+  const _SpeedBottomBar({
+    required this.kmh,
+    required this.isMoving,
+    required this.etaLabel,
+    required this.nextStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final accent = isMoving ? _green(context) : _textDim(context);
+    final speedColor = kmh >= 60
+        ? const Color(0xFFEF4444)
+        : kmh >= 30
+            ? _amber(context)
+            : accent;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: isDark ? 0.96 : 0.98),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.dividerColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Speed gauge (compact)
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: speedColor.withValues(alpha: 0.12),
+              border: Border.all(color: speedColor.withValues(alpha: 0.55), width: 2),
+            ),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  kmh.round().toString(),
+                  style: TextStyle(
+                    color: speedColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'km/h',
+                  style: TextStyle(
+                    color: speedColor.withValues(alpha: 0.85),
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Status / ETA / next stop block
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isMoving
+                          ? Icons.directions_bus_filled_rounded
+                          : Icons.pause_circle_filled_rounded,
+                      color: accent,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isMoving ? 'BUS MOVING' : 'STOPPED',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _amber(context).withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _amber(context).withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.schedule_rounded,
+                            color: _amber(context),
+                            size: 10,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            'ETA $etaLabel',
+                            style: TextStyle(
+                              color: _amber(context),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Next: $nextStop',
+                  style: TextStyle(
+                    color: theme.textTheme.bodyLarge?.color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -574,8 +806,14 @@ class _StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Text(status,
-          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -584,15 +822,29 @@ class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String value;
   final Color color;
-  const _InfoChip({required this.icon, required this.value, required this.color});
+  const _InfoChip({
+    required this.icon,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, color: color, size: 14),
-      const SizedBox(width: 5),
-      Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -600,7 +852,11 @@ class _MapControlButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final ThemeData theme;
-  const _MapControlButton({required this.icon, required this.onTap, required this.theme});
+  const _MapControlButton({
+    required this.icon,
+    required this.onTap,
+    required this.theme,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -638,7 +894,10 @@ class _BusDetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 90, child: Text(label, style: TextStyle(color: dim, fontSize: 12))),
+          SizedBox(
+            width: 90,
+            child: Text(label, style: TextStyle(color: dim, fontSize: 12)),
+          ),
           Expanded(
             child: Text(
               value,

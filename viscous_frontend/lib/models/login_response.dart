@@ -4,12 +4,7 @@ class LoginResponse {
   final User? user;
   final String? message;
 
-  LoginResponse({
-    required this.success,
-    this.token,
-    this.user,
-    this.message,
-  });
+  LoginResponse({required this.success, this.token, this.user, this.message});
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     return LoginResponse(
@@ -41,6 +36,8 @@ class User {
   final String? route;
   final String? status;
   final String? userstop;
+  final Map<String, dynamic>? notificationPreferences;
+  final Map<String, dynamic>? notificationQuietHours;
 
   User({
     this.id,
@@ -53,6 +50,8 @@ class User {
     this.route,
     this.status,
     this.userstop,
+    this.notificationPreferences,
+    this.notificationQuietHours,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -67,6 +66,14 @@ class User {
       route: json['route'] as String?,
       status: json['status'] as String?,
       userstop: json['userstop'] as String?,
+      notificationPreferences:
+          (json['notificationPreferences'] is Map<String, dynamic>)
+          ? json['notificationPreferences'] as Map<String, dynamic>
+          : null,
+      notificationQuietHours:
+          (json['notificationQuietHours'] is Map<String, dynamic>)
+          ? json['notificationQuietHours'] as Map<String, dynamic>
+          : null,
     );
   }
 
@@ -82,6 +89,8 @@ class User {
       'route': route,
       'status': status,
       'userstop': userstop,
+      'notificationPreferences': notificationPreferences,
+      'notificationQuietHours': notificationQuietHours,
     };
   }
 }

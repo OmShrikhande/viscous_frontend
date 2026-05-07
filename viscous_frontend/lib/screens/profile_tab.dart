@@ -9,14 +9,18 @@ import '../services/storage_service.dart';
 
 // ─── Theme-resolved helpers ────────────────────────────────────────────────────
 Color _primary(BuildContext ctx) => Theme.of(ctx).colorScheme.primary;
-Color _amber(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFFFFB930) : const Color(0xFFD97706);
-Color _red(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFFFF4D6D) : const Color(0xFFDC2626);
-Color _green(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF00E676) : const Color(0xFF059669);
-Color _textDim(BuildContext ctx) =>
-    Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF5A6A90) : const Color(0xFF64748B);
+Color _amber(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFFFFB930)
+    : const Color(0xFFD97706);
+Color _red(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFFFF4D6D)
+    : const Color(0xFFDC2626);
+Color _green(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFF00E676)
+    : const Color(0xFF059669);
+Color _textDim(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
+    ? const Color(0xFF5A6A90)
+    : const Color(0xFF64748B);
 
 class ProfileTab extends ConsumerStatefulWidget {
   const ProfileTab({super.key});
@@ -32,9 +36,17 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _stopController = TextEditingController();
+  final _quietStartController = TextEditingController(text: '22:00');
+  final _quietEndController = TextEditingController(text: '06:00');
   User? _user;
   bool _loading = true;
   bool _saving = false;
+  bool _notifyReached = true;
+  bool _notifyEta = true;
+  bool _notifyOneStopAway = true;
+  bool _notifyRouteLastStop = true;
+  bool _notifyBusStarted = true;
+  bool _quietHoursEnabled = false;
 
   @override
   void initState() {
@@ -56,7 +68,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
           SnackBar(
             content: const Text('Failed to load profile.'),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -78,6 +92,26 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     _emailController.text = user.email ?? '';
     _phoneController.text = user.phone ?? '';
     _stopController.text = user.userstop ?? '';
+    final prefs = user.notificationPreferences ?? {};
+    final quiet = user.notificationQuietHours ?? {};
+    _notifyReached = prefs['notifyReached'] is bool
+        ? prefs['notifyReached'] as bool
+        : true;
+    _notifyEta = prefs['notifyEta'] is bool ? prefs['notifyEta'] as bool : true;
+    _notifyOneStopAway = prefs['notifyOneStopAway'] is bool
+        ? prefs['notifyOneStopAway'] as bool
+        : true;
+    _notifyRouteLastStop = prefs['notifyRouteLastStop'] is bool
+        ? prefs['notifyRouteLastStop'] as bool
+        : true;
+    _notifyBusStarted = prefs['notifyBusStarted'] is bool
+        ? prefs['notifyBusStarted'] as bool
+        : true;
+    _quietHoursEnabled = quiet['enabled'] is bool
+        ? quiet['enabled'] as bool
+        : false;
+    _quietStartController.text = (quiet['start'] ?? '22:00').toString();
+    _quietEndController.text = (quiet['end'] ?? '06:00').toString();
   }
 
   Future<void> _saveProfile() async {
@@ -88,6 +122,19 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         userstop: _stopController.text.trim(),
+        notificationPreferences: {
+          'notifyReached': _notifyReached,
+          'notifyEta': _notifyEta,
+          'notifyOneStopAway': _notifyOneStopAway,
+          'notifyRouteLastStop': _notifyRouteLastStop,
+          'notifyBusStarted': _notifyBusStarted,
+        },
+        notificationQuietHours: {
+          'enabled': _quietHoursEnabled,
+          'start': _quietStartController.text.trim(),
+          'end': _quietEndController.text.trim(),
+          'timezoneOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+        },
       );
       _applyUser(updated);
       if (mounted) {
@@ -96,7 +143,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
             content: const Text('Profile updated ✓'),
             backgroundColor: _green(context),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -107,7 +156,9 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
             content: const Text('Failed to update profile.'),
             backgroundColor: _red(context),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -123,8 +174,13 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
         final theme = Theme.of(ctx);
         return AlertDialog(
           backgroundColor: theme.colorScheme.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Sign Out?', style: TextStyle(fontWeight: FontWeight.w800)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'Sign Out?',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
           content: const Text('You will be returned to the login screen.'),
           actions: [
             TextButton(
@@ -133,7 +189,10 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Sign Out', style: TextStyle(color: _red(ctx), fontWeight: FontWeight.w700)),
+              child: Text(
+                'Sign Out',
+                style: TextStyle(color: _red(ctx), fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         );
@@ -151,6 +210,8 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     _emailController.dispose();
     _phoneController.dispose();
     _stopController.dispose();
+    _quietStartController.dispose();
+    _quietEndController.dispose();
     super.dispose();
   }
 
@@ -159,13 +220,18 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final tracking = ref.watch(trackingProvider);
-    final displayRoute = tracking.routeMeta?.routeNumber ?? _user?.route ?? 'No route';
+    final displayRoute =
+        tracking.routeMeta?.routeNumber ?? _user?.route ?? 'No route';
 
     return Container(
       color: theme.scaffoldBackgroundColor,
       child: SafeArea(
         child: _loading
-            ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+            ? Center(
+                child: CircularProgressIndicator(
+                  color: theme.colorScheme.primary,
+                ),
+              )
             : RefreshIndicator(
                 color: theme.colorScheme.primary,
                 onRefresh: _onPullRefresh,
@@ -187,17 +253,31 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                         children: [
                           // ── Account fields ──────────────────────────────
                           _SectionLabel('ACCOUNT INFO'),
-                          _ProfileField(label: 'Full Name', controller: _nameController,
-                              icon: Icons.person_rounded),
+                          _ProfileField(
+                            label: 'Full Name',
+                            controller: _nameController,
+                            icon: Icons.person_rounded,
+                          ),
                           const SizedBox(height: 10),
-                          _ProfileField(label: 'Email Address', controller: _emailController,
-                              icon: Icons.email_rounded, inputType: TextInputType.emailAddress),
+                          _ProfileField(
+                            label: 'Email Address',
+                            controller: _emailController,
+                            icon: Icons.email_rounded,
+                            inputType: TextInputType.emailAddress,
+                          ),
                           const SizedBox(height: 10),
-                          _ProfileField(label: 'Phone Number', controller: _phoneController,
-                              icon: Icons.phone_rounded, inputType: TextInputType.phone),
+                          _ProfileField(
+                            label: 'Phone Number',
+                            controller: _phoneController,
+                            icon: Icons.phone_rounded,
+                            inputType: TextInputType.phone,
+                          ),
                           const SizedBox(height: 10),
-                          _ProfileField(label: 'Bus Stop', controller: _stopController,
-                              icon: Icons.location_on_rounded),
+                          _ProfileField(
+                            label: 'Bus Stop',
+                            controller: _stopController,
+                            icon: Icons.location_on_rounded,
+                          ),
 
                           const SizedBox(height: 20),
 
@@ -223,14 +303,80 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                             icon: Icons.notifications_active_rounded,
                             iconColor: _amber(context),
                             title: 'Notification preferences',
-                            subtitle: 'Arrival · Delays · Emergencies · Admin alerts',
+                            subtitle: 'Customize alerts by event type',
+                          ),
+                          const SizedBox(height: 10),
+                          _NotificationToggleTile(
+                            title: 'Reached my stop',
+                            value: _notifyReached,
+                            onChanged: (v) =>
+                                setState(() => _notifyReached = v),
+                          ),
+                          _NotificationToggleTile(
+                            title: 'ETA alerts',
+                            value: _notifyEta,
+                            onChanged: (v) => setState(() => _notifyEta = v),
+                          ),
+                          _NotificationToggleTile(
+                            title: 'One-stop-away alerts',
+                            value: _notifyOneStopAway,
+                            onChanged: (v) =>
+                                setState(() => _notifyOneStopAway = v),
+                          ),
+                          _NotificationToggleTile(
+                            title: 'Last stop alerts',
+                            value: _notifyRouteLastStop,
+                            onChanged: (v) =>
+                                setState(() => _notifyRouteLastStop = v),
+                          ),
+                          _NotificationToggleTile(
+                            title: 'Bus started alerts',
+                            value: _notifyBusStarted,
+                            onChanged: (v) =>
+                                setState(() => _notifyBusStarted = v),
+                          ),
+                          const SizedBox(height: 10),
+                          _InfoCard(
+                            icon: Icons.bedtime_rounded,
+                            iconColor: _textDim(context),
+                            title: 'Quiet hours',
+                            subtitle:
+                                'Mute non-critical alerts in selected time range',
+                          ),
+                          const SizedBox(height: 10),
+                          _NotificationToggleTile(
+                            title: 'Enable quiet hours',
+                            value: _quietHoursEnabled,
+                            onChanged: (v) =>
+                                setState(() => _quietHoursEnabled = v),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _ProfileField(
+                                  label: 'Quiet Start (HH:mm)',
+                                  controller: _quietStartController,
+                                  icon: Icons.nightlight_round,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _ProfileField(
+                                  label: 'Quiet End (HH:mm)',
+                                  controller: _quietEndController,
+                                  icon: Icons.wb_sunny_rounded,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           _InfoCard(
                             icon: Icons.emergency_rounded,
                             iconColor: _red(context),
                             title: 'Emergency contacts',
-                            subtitle: 'Driver: +91 9000000001  •  School: +91 9000000002',
+                            subtitle:
+                                'Driver: +91 9000000001  •  School: +91 9000000002',
                           ),
 
                           const SizedBox(height: 24),
@@ -255,12 +401,55 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
   }
 }
 
+class _NotificationToggleTile extends StatelessWidget {
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _NotificationToggleTile({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Profile header ────────────────────────────────────────────────────────────
 class _ProfileHeader extends StatelessWidget {
   final User? user;
   final String displayRoute;
   final bool isDark;
-  const _ProfileHeader({required this.user, required this.displayRoute, required this.isDark});
+  const _ProfileHeader({
+    required this.user,
+    required this.displayRoute,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -311,9 +500,16 @@ class _ProfileHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.15),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.5),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    width: 2.5,
+                  ),
                 ),
-                child: const Icon(Icons.person_rounded, size: 44, color: Colors.white),
+                child: const Icon(
+                  Icons.person_rounded,
+                  size: 44,
+                  color: Colors.white,
+                ),
               ),
               Positioned(
                 bottom: 4,
@@ -321,13 +517,22 @@ class _ProfileHeader extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF00E676) : const Color(0xFF059669),
+                    color: isDark
+                        ? const Color(0xFF00E676)
+                        : const Color(0xFF059669),
                     shape: BoxShape.circle,
                     border: Border.all(
-                        color: isDark ? const Color(0xFF080D22) : const Color(0xFF1D4ED8),
-                        width: 2),
+                      color: isDark
+                          ? const Color(0xFF080D22)
+                          : const Color(0xFF1D4ED8),
+                      width: 2,
+                    ),
                   ),
-                  child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 11),
+                  child: const Icon(
+                    Icons.verified_user_rounded,
+                    color: Colors.white,
+                    size: 11,
+                  ),
                 ),
               ),
             ],
@@ -336,13 +541,19 @@ class _ProfileHeader extends StatelessWidget {
           Text(
             user?.name ?? 'User',
             style: const TextStyle(
-                color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             '${user?.role?.toUpperCase() ?? "STUDENT"}  •  $displayRoute',
             style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7), fontSize: 12, letterSpacing: 0.3),
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 12,
+              letterSpacing: 0.3,
+            ),
           ),
         ],
       ),
@@ -393,7 +604,9 @@ class _ThemeSelector extends ConsumerWidget {
                 curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected ? primary.withValues(alpha: 0.12) : Colors.transparent,
+                  color: isSelected
+                      ? primary.withValues(alpha: 0.12)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   border: isSelected
                       ? Border.all(color: primary.withValues(alpha: 0.3))
@@ -402,15 +615,20 @@ class _ThemeSelector extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon,
-                        color: isSelected ? primary : _textDim(context), size: 20),
+                    Icon(
+                      icon,
+                      color: isSelected ? primary : _textDim(context),
+                      size: 20,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       label,
                       style: TextStyle(
                         color: isSelected ? primary : _textDim(context),
                         fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                   ],
@@ -445,7 +663,10 @@ class _SaveButton extends StatelessWidget {
           gradient: saving
               ? null
               : LinearGradient(
-                  colors: [primary, isDark ? const Color(0xFF0099CC) : const Color(0xFF2563EB)],
+                  colors: [
+                    primary,
+                    isDark ? const Color(0xFF0099CC) : const Color(0xFF2563EB),
+                  ],
                 ),
           color: saving ? theme.dividerColor : null,
           boxShadow: saving
@@ -463,7 +684,9 @@ class _SaveButton extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
           child: saving
               ? SizedBox(
@@ -482,10 +705,11 @@ class _SaveButton extends StatelessWidget {
                     Text(
                       'SAVE PROFILE',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1,
-                          fontSize: 14),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -521,10 +745,11 @@ class _LogoutButton extends StatelessWidget {
             Text(
               'SIGN OUT',
               style: TextStyle(
-                  color: red,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2),
+                color: red,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
             ),
           ],
         ),
@@ -571,7 +796,10 @@ class _ProfileField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: theme.dividerColor),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 15,
+        ),
       ),
     );
   }
@@ -638,9 +866,10 @@ class _InfoCard extends StatelessWidget {
         boxShadow: [
           if (theme.brightness == Brightness.light)
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 6,
-                offset: const Offset(0, 2)),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
         ],
       ),
       child: Row(
@@ -660,14 +889,19 @@ class _InfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: theme.textTheme.bodyLarge?.color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(subtitle,
-                    style: TextStyle(color: _textDim(context), fontSize: 11)),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: _textDim(context), fontSize: 11),
+                ),
               ],
             ),
           ),

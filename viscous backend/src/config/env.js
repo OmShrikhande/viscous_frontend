@@ -23,16 +23,17 @@ export const env = {
     serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON
   },
   scheduler: {
-    selfCallIntervalMs: Number(process.env.LOCATION_SYNC_INTERVAL_MS ?? 6_000),
-    staleLocationMs: Number(process.env.STALE_LOCATION_MS ?? 30_000),
-    // Keep idle optimization conservative so tracking does not feel stale in production.
-    idlePollingStartMs: Number(process.env.IDLE_POLLING_START_MS ?? 120_000),
-    idlePollingCooldownMs: Number(process.env.IDLE_POLLING_COOLDOWN_MS ?? 12_000),
+    // 12s active sync (was 6s) → halves Firestore writes without hurting UX.
+    selfCallIntervalMs: Number(process.env.LOCATION_SYNC_INTERVAL_MS ?? 12_000),
+    staleLocationMs: Number(process.env.STALE_LOCATION_MS ?? 45_000),
+    // Aggressive idle cooldown when bus is stationary at a stop — saves ~80% writes overnight.
+    idlePollingStartMs: Number(process.env.IDLE_POLLING_START_MS ?? 90_000),
+    idlePollingCooldownMs: Number(process.env.IDLE_POLLING_COOLDOWN_MS ?? 60_000),
     routeProximityMeters: Number(process.env.ROUTE_PROXIMITY_METERS ?? 100),
     movementThresholdMeters: Number(process.env.MOVEMENT_THRESHOLD_METERS ?? 10),
     internalApiKey: process.env.INTERNAL_API_KEY ?? "",
     routeNumber: process.env.ROUTE_NUMBER ?? process.env.Route ?? ""
   },
   /** Short TTL cache for GET /bus-location so many parents on one route share Firestore reads. */
-  trackingSnapshotCacheTtlMs: Number(process.env.TRACKING_SNAPSHOT_CACHE_TTL_MS ?? 4_000)
+  trackingSnapshotCacheTtlMs: Number(process.env.TRACKING_SNAPSHOT_CACHE_TTL_MS ?? 10_000)
 };
