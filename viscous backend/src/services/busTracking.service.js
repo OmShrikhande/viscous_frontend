@@ -35,10 +35,37 @@ const normalizeStop = (stop, index) => ({
   coordinates: [Number(stop?.coordinates?.[0]), Number(stop?.coordinates?.[1])]
 });
 
+const normalizeStopLabel = (value) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const resolveUserStopIndex = (routeStops, userStop) => {
   if (!userStop) return -1;
-  const normalized = userStop.trim().toLowerCase();
-  return routeStops.findIndex((s) => s.name.trim().toLowerCase() === normalized);
+  const normalized = normalizeStopLabel(userStop);
+  if (!normalized) return -1;
+
+  const exactMatch = routeStops.findIndex((s) => normalizeStopLabel(s.name) === normalized);
+  if (exactMatch >= 0) return exactMatch;
+
+  // Accept minor naming differences (extra words / punctuation) from profile data.
+  const fuzzyMatch = routeStops.findIndex((s) => {
+    const stopName = normalizeStopLabel(s.name);
+    return stopName.includes(normalized) || normalized.includes(stopName);
+  });
+  if (fuzzyMatch >= 0) return fuzzyMatch;
+
+  // Support numeric stop value entered in user profile (1-based preferred).
+  const parsed = Number(normalized);
+  if (Number.isInteger(parsed)) {
+    if (parsed >= 1 && parsed <= routeStops.length) return parsed - 1;
+    if (parsed >= 0 && parsed < routeStops.length) return parsed;
+  }
+
+  return -1;
 };
 
 const buildOrderedStops = (routeStops, direction) => {
@@ -75,19 +102,43 @@ const getRouteByNumber = async (routeNumber) => {
   return route;
 };
 
-const getActiveUsersByRoute = async (routeId) => {
-  const cacheHit = usersCache.get(routeId);
+const getActiveUsersByRoute = async (route) => {
+  const routeId = route.id;
+  const routeNumber = route.routeNumber;
+  const cacheKey = `${routeId}:${routeNumber ?? ""}`;
+  const cacheHit = usersCache.get(cacheKey);
   if (cacheHit && Date.now() - cacheHit.cachedAt < USERS_CACHE_TTL_MS) {
     return cacheHit.users;
   }
 
-  const usersSnap = await firestoreDb
+  const activeByRouteIdSnap = await firestoreDb
     .collection("users")
     .where("route", "==", routeId)
     .where("status", "==", "active")
     .get();
-  const users = usersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  usersCache.set(routeId, { users, cachedAt: Date.now() });
+
+  // Backward compatibility: some users store routeNumber instead of route document id.
+  let activeByRouteNumberSnap = null;
+  if (routeNumber) {
+    activeByRouteNumberSnap = await firestoreDb
+      .collection("users")
+      .where("route", "==", routeNumber)
+      .where("status", "==", "active")
+      .get();
+  }
+
+  const merged = new Map();
+  for (const doc of activeByRouteIdSnap.docs) {
+    merged.set(doc.id, { id: doc.id, ...doc.data() });
+  }
+  for (const doc of activeByRouteNumberSnap?.docs ?? []) {
+    if (!merged.has(doc.id)) {
+      merged.set(doc.id, { id: doc.id, ...doc.data() });
+    }
+  }
+
+  const users = Array.from(merged.values());
+  usersCache.set(cacheKey, { users, cachedAt: Date.now() });
   return users;
 };
 
@@ -129,6 +180,15 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
       data: {
         routeId,
         ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v ?? "")]))
+      },
+      android: {
+        priority: "high",
+        ttl: 1000 * 60 * 60 * 6
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10"
+        }
       },
       tokens
     });
@@ -422,8 +482,32 @@ export const syncConfiguredRoute = async () => {
 
     const notificationKey = `${roundTripState.direction}:${roundTripState.currentStopIndex}`;
     const previousNotificationKey = runtimeData.lastNotifiedKey ?? "";
+    const previousBusStatus = String(runtimeData.status ?? runtimeData.busStatus ?? "").toLowerCase();
+    const currentBusStatus = nextPayload.status;
+    if (currentBusStatus === "running" && previousBusStatus && previousBusStatus !== "running") {
+      const allUsers = await getActiveUsersByRoute(route);
+      const runningResult = await sendUsersNotification({
+        routeId: route.id,
+        users: allUsers,
+        title: "Bus is on the way",
+        body: `Bus ${route.busId} is now running on route ${route.routeNumber}.`,
+        data: {
+          type: "bus_started",
+          stopIndex: roundTripState.currentStopIndex,
+          direction: roundTripState.direction
+        }
+      });
+      logger.info("Bus started notification cycle processed", {
+        routeId: route.id,
+        attemptedUsers: runningResult.attemptedUsers,
+        attemptedTokens: runningResult.attemptedTokens,
+        successCount: runningResult.successCount,
+        failureCount: runningResult.failureCount
+      });
+    }
+
     if (withinRouteArea && notificationKey !== previousNotificationKey) {
-      const users = await getActiveUsersByRoute(route.id);
+      const users = await getActiveUsersByRoute(route);
       const stopIndex = roundTripState.currentStopIndex;
       const nowStop = routeStops[stopIndex];
       const userIndexMap = new Map(

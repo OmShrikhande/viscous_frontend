@@ -70,3 +70,6 @@ app.*.map.json
 **/android/app/debug/
 **/android/app/profile/
 **/android/app/release/
+
+upload-keystore.jks
+*/pubspec.lock

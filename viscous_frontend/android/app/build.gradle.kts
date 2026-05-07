@@ -1,19 +1,33 @@
+import java.io.File
 import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
+
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
+// Resolve keystore: key.properties paths are usually relative to android/ or android/app/.
+val releaseStoreFile: File? =
+    keystoreProperties.getProperty("storeFile")?.let { path ->
+        sequenceOf(rootProject.file(path), project.file(path)).firstOrNull { it.isFile }
+    }
+val useReleaseKeystore: Boolean =
+    keystorePropertiesFile.exists() &&
+        releaseStoreFile != null &&
+        releaseStoreFile.isFile &&
+        !keystoreProperties.getProperty("keyAlias").isNullOrBlank() &&
+        !keystoreProperties.getProperty("storePassword").isNullOrBlank() &&
+        !keystoreProperties.getProperty("keyPassword").isNullOrBlank()
 
 android {
     namespace = "com.eistatech.vscous"
@@ -27,7 +41,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -39,11 +53,11 @@ android {
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (useReleaseKeystore) {
             create("release") {
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile")!!)
+                storeFile = releaseStoreFile
                 storePassword = keystoreProperties.getProperty("storePassword")
             }
         }
@@ -52,16 +66,16 @@ android {
     buildTypes {
         release {
             signingConfig =
-                if (keystorePropertiesFile.exists()) {
-                    signingConfigs.getByName("release")
-                } else {
-                    signingConfigs.getByName("debug")
-                }
-            isMinifyEnabled = true
-            isShrinkResources = true
+                if (useReleaseKeystore) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
+
+            // 🔴 IMPORTANT: turn OFF for testing (avoid crashes)
+            isMinifyEnabled = false
+            isShrinkResources = false
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
+                "proguard-rules.pro"
             )
         }
     }
@@ -73,7 +87,7 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-    // integration_test is a dev_dependency but still listed in GeneratedPluginRegistrant;
-    // the Android module must be on the classpath for release Java compile to succeed.
-    implementation(project(":integration_test"))
+
+    // ❗ REMOVE this in most cases (causes release issues)
+    // implementation(project(":integration_test"))
 }

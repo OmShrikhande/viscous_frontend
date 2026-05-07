@@ -77,7 +77,7 @@ class BusTrackerApp extends ConsumerWidget {
     );
 
     return MaterialApp.router(
-      title: 'Viscous Bus Tracker',
+      title: 'Viscous',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       themeMode: themeMode,

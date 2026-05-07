@@ -17,8 +17,11 @@ class PushNotificationService {
   Future<void>? _initializing;
   String _lastForegroundMessageKey = '';
   DateTime _lastForegroundMessageAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String _lastUploadedToken = '';
 
-  Future<void> initialize({GlobalKey<ScaffoldMessengerState>? messengerKey}) async {
+  Future<void> initialize({
+    GlobalKey<ScaffoldMessengerState>? messengerKey,
+  }) async {
     if (_isInitialized) return;
     if (_initializing != null) return _initializing!;
 
@@ -27,24 +30,32 @@ class PushNotificationService {
     _initializing = null;
   }
 
-  Future<void> _initializeInternal({GlobalKey<ScaffoldMessengerState>? messengerKey}) async {
+  Future<void> _initializeInternal({
+    GlobalKey<ScaffoldMessengerState>? messengerKey,
+  }) async {
     if (Firebase.apps.isEmpty) {
-      debugPrint('[FCM] Firebase is not initialized. Skipping push notification setup.');
+      debugPrint(
+        '[FCM] Firebase is not initialized. Skipping push notification setup.',
+      );
       return;
     }
 
-    final androidInit = const AndroidInitializationSettings('@mipmap/ic_launcher');
+    final androidInit = const AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     final initSettings = InitializationSettings(android: androidInit);
     await _localNotifications.initialize(initSettings);
 
     final androidChannel = AndroidNotificationChannel(
       'viscous_default_channel',
-      'Viscous updates',
-      description: 'Foreground notifications for bus updates',
+      'Viscous',
+      description: 'Bus and school updates',
       importance: Importance.high,
     );
     await _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(androidChannel);
 
     await _messaging.setAutoInitEnabled(true);
@@ -75,13 +86,12 @@ class PushNotificationService {
       debugPrint('[FCM] token retrieval failed: $error');
     }
 
-    if (token != null && token.isNotEmpty) {
-      try {
-        await _userService.upsertFcmToken(token);
-      } catch (error) {
-        debugPrint('[FCM] token upload failed: $error');
-      }
-    }
+    await _registerTokenIfNeeded(token);
+
+    _messaging.onTokenRefresh.listen((newToken) async {
+      debugPrint('[FCM] token refreshed');
+      await _registerTokenIfNeeded(newToken);
+    });
 
     try {
       await _messaging.subscribeToTopic('viscous_broadcast');
@@ -119,7 +129,26 @@ class PushNotificationService {
       debugPrint('[FCM] opened from notification: ${message.messageId}');
     });
 
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      debugPrint(
+        '[FCM] opened from terminated state: ${initialMessage.messageId}',
+      );
+    }
+
     _isInitialized = true;
+  }
+
+  Future<void> _registerTokenIfNeeded(String? token) async {
+    if (token == null || token.isEmpty) return;
+    if (token == _lastUploadedToken) return;
+    try {
+      await _userService.upsertFcmToken(token);
+      _lastUploadedToken = token;
+      debugPrint('[FCM] token uploaded');
+    } catch (error) {
+      debugPrint('[FCM] token upload failed: $error');
+    }
   }
 
   Future<void> _showForegroundSystemNotification({
@@ -130,7 +159,7 @@ class PushNotificationService {
       android: AndroidNotificationDetails(
         'viscous_default_channel',
         'Viscous updates',
-        channelDescription: 'Foreground notifications for bus updates',
+        channelDescription: 'Bus and school updates',
         importance: Importance.high,
         priority: Priority.high,
       ),
