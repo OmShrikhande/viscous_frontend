@@ -25,6 +25,9 @@ export const env = {
   scheduler: {
     selfCallIntervalMs: Number(process.env.LOCATION_SYNC_INTERVAL_MS ?? 6_000),
     staleLocationMs: Number(process.env.STALE_LOCATION_MS ?? 30_000),
+    // Keep idle optimization conservative so tracking does not feel stale in production.
+    idlePollingStartMs: Number(process.env.IDLE_POLLING_START_MS ?? 120_000),
+    idlePollingCooldownMs: Number(process.env.IDLE_POLLING_COOLDOWN_MS ?? 12_000),
     routeProximityMeters: Number(process.env.ROUTE_PROXIMITY_METERS ?? 100),
     movementThresholdMeters: Number(process.env.MOVEMENT_THRESHOLD_METERS ?? 10),
     internalApiKey: process.env.INTERNAL_API_KEY ?? "",

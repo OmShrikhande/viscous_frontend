@@ -25,20 +25,28 @@ const runSync = async () => {
       if (shouldLogSkip(result.reason)) {
         logger.warn("Scheduled sync skipped", { reason: result.reason });
       }
-      return;
+      return env.scheduler.selfCallIntervalMs;
     }
     logger.info("Scheduled sync completed", result);
+    const cooldownMs = Number(result.cooldownMs ?? 0);
+    if (cooldownMs > env.scheduler.selfCallIntervalMs) {
+      logger.info("Idle cooldown applied for sync loop", { cooldownMs });
+      return cooldownMs;
+    }
+    return env.scheduler.selfCallIntervalMs;
   } catch (error) {
     logger.error("Scheduled sync failed", { message: error.message });
+    return env.scheduler.selfCallIntervalMs;
   }
 };
 
 export const startLocationSyncJob = () => {
-  setInterval(() => {
-    void runSync();
-  }, env.scheduler.selfCallIntervalMs);
+  const scheduleNext = (delayMs) => {
+    setTimeout(async () => {
+      const nextDelay = await runSync();
+      scheduleNext(nextDelay);
+    }, delayMs);
+  };
 
-  setTimeout(() => {
-    void runSync();
-  }, 10_000);
+  scheduleNext(10_000);
 };

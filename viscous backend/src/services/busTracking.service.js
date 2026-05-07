@@ -10,6 +10,17 @@ let isSyncRunning = false;
 
 const ROUTE_CACHE_TTL_MS = 60_000;
 const USERS_CACHE_TTL_MS = 30_000;
+const INVALID_FCM_CODES = new Set([
+  "messaging/invalid-registration-token",
+  "messaging/registration-token-not-registered"
+]);
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+  notifyReached: true,
+  notifyEta: true,
+  notifyOneStopAway: true,
+  notifyRouteLastStop: true,
+  notifyBusStarted: true
+};
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
@@ -83,6 +94,75 @@ const computeDisplayIndex = (currentStopIndex, stopCount, direction) => {
   return currentStopIndex;
 };
 
+const parseTimeToMinutes = (value) => {
+  const text = String(value ?? "").trim();
+  const match = /^(\d{1,2}):(\d{2})$/.exec(text);
+  if (!match) return null;
+  const hh = Number(match[1]);
+  const mm = Number(match[2]);
+  if (!Number.isInteger(hh) || !Number.isInteger(mm)) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+};
+
+const isWithinQuietHours = (user, nowMs) => {
+  const quiet = user?.notificationQuietHours;
+  if (!quiet || quiet.enabled !== true) return false;
+  const startMinutes = parseTimeToMinutes(quiet.start);
+  const endMinutes = parseTimeToMinutes(quiet.end);
+  if (startMinutes === null || endMinutes === null || startMinutes === endMinutes) return false;
+  const offset = Number(quiet.timezoneOffsetMinutes ?? 330);
+  const offsetMinutes = Number.isFinite(offset) ? Math.max(-720, Math.min(840, offset)) : 330;
+  const utcMinutes = Math.floor(nowMs / 60_000) % 1_440;
+  const localMinutes = (utcMinutes + offsetMinutes + 1_440) % 1_440;
+  if (startMinutes < endMinutes) {
+    return localMinutes >= startMinutes && localMinutes < endMinutes;
+  }
+  return localMinutes >= startMinutes || localMinutes < endMinutes;
+};
+
+const getUserNotificationPreferences = (user) => {
+  const prefs = user?.notificationPreferences;
+  if (!prefs || typeof prefs !== "object") return DEFAULT_NOTIFICATION_PREFERENCES;
+  const pick = (key) => (typeof prefs[key] === "boolean" ? prefs[key] : DEFAULT_NOTIFICATION_PREFERENCES[key]);
+  return {
+    notifyReached: pick("notifyReached"),
+    notifyEta: pick("notifyEta"),
+    notifyOneStopAway: pick("notifyOneStopAway"),
+    notifyRouteLastStop: pick("notifyRouteLastStop"),
+    notifyBusStarted: pick("notifyBusStarted")
+  };
+};
+
+const userAllowsEventNotification = (user, eventKey, nowMs) => {
+  if (isWithinQuietHours(user, nowMs)) return false;
+  const prefs = getUserNotificationPreferences(user);
+  if (eventKey === "reached") return prefs.notifyReached;
+  if (eventKey === "eta") return prefs.notifyEta;
+  if (eventKey === "one_stop_away") return prefs.notifyOneStopAway;
+  if (eventKey === "route_last_stop") return prefs.notifyRouteLastStop;
+  if (eventKey === "bus_started") return prefs.notifyBusStarted;
+  return true;
+};
+
+const computeTrackingConfidence = ({
+  staleDurationMs,
+  movedMeters,
+  nearestStopDistanceMeters,
+  withinRouteArea,
+  isRunning
+}) => {
+  let score = 100;
+  const stalePenalty = Math.min(45, (staleDurationMs / 1000) * 1.2);
+  score -= stalePenalty;
+  if (!withinRouteArea) score -= 20;
+  if (isRunning && movedMeters < env.scheduler.movementThresholdMeters) score -= 15;
+  score -= Math.min(15, Number(nearestStopDistanceMeters ?? 0) / 20);
+  score = Math.max(5, Math.min(100, Math.round(score)));
+  const level = score >= 75 ? "high" : score >= 45 ? "medium" : "low";
+  return { score, level };
+};
+
 const getRouteByNumber = async (routeNumber) => {
   const cacheHit = routeCache.get(routeNumber);
   if (cacheHit && Date.now() - cacheHit.cachedAt < ROUTE_CACHE_TTL_MS) {
@@ -153,9 +233,25 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
       reason: "no_users"
     };
   }
-  const tokens = Array.from(new Set(users
-    .map((u) => u.fcmToken)
-    .filter((token) => typeof token === "string" && token.trim().length > 0)));
+  const tokenToUserIds = new Map();
+  const tokens = [];
+  for (const user of users) {
+    const normalizedTokens = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(user.fcmTokens) ? user.fcmTokens : []),
+          user.fcmToken
+        ].filter((token) => typeof token === "string" && token.trim().length > 0)
+      )
+    );
+    for (const token of normalizedTokens) {
+      if (!tokenToUserIds.has(token)) {
+        tokenToUserIds.set(token, new Set());
+        tokens.push(token);
+      }
+      tokenToUserIds.get(token).add(user.id);
+    }
+  }
   if (!tokens.length) {
     logger.warn("Notification skipped: no FCM tokens", {
       routeId,
@@ -192,6 +288,53 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
       },
       tokens
     });
+
+    const invalidTokenOwners = new Map();
+    response.responses.forEach((result, index) => {
+      if (result.success) return;
+      const code = String(result.error?.code ?? "");
+      if (!INVALID_FCM_CODES.has(code)) return;
+      const token = tokens[index];
+      const ownerIds = tokenToUserIds.get(token);
+      if (!ownerIds) return;
+      for (const userId of ownerIds) {
+        if (!invalidTokenOwners.has(userId)) invalidTokenOwners.set(userId, new Set());
+        invalidTokenOwners.get(userId).add(token);
+      }
+    });
+
+    if (invalidTokenOwners.size > 0) {
+      const cleanupBatch = firestoreDb.batch();
+      for (const [userId, invalidTokens] of invalidTokenOwners.entries()) {
+        const user = users.find((u) => u.id === userId);
+        if (!user) continue;
+        const cleaned = Array.from(
+          new Set(
+            [
+              ...(Array.isArray(user.fcmTokens) ? user.fcmTokens : []),
+              user.fcmToken
+            ]
+              .filter((token) => typeof token === "string" && token.trim().length > 0)
+              .filter((token) => !invalidTokens.has(token))
+          )
+        );
+        cleanupBatch.set(
+          firestoreDb.collection("users").doc(userId),
+          {
+            fcmTokens: cleaned,
+            fcmToken: cleaned[0] ?? null,
+            fcmTokenUpdatedAt: new Date().toISOString()
+          },
+          { merge: true }
+        );
+      }
+      await cleanupBatch.commit();
+      logger.warn("Invalid FCM tokens pruned", {
+        routeId,
+        affectedUsers: invalidTokenOwners.size
+      });
+    }
+
     return {
       attemptedUsers: users.length,
       attemptedTokens: tokens.length,
@@ -248,11 +391,9 @@ const updateRoundTripState = ({ routeStops, runtimeData, nearestStopIndex, withi
   let roundsCompleted = Number(runtimeData.roundsCompleted ?? 0);
 
   if (withinRouteArea) {
-    const nextIndex =
-      direction === 1
-        ? Math.max(currentStopIndex, nearestStopIndex)
-        : Math.min(currentStopIndex, nearestStopIndex);
-    currentStopIndex = nextIndex;
+    // Snap to nearest in-range stop so runtime state cannot get stuck
+    // at an endpoint when GPS already moved near a middle stop.
+    currentStopIndex = nearestStopIndex;
   }
 
   if (currentStopIndex >= stopCount - 1 && direction === 1) {
@@ -402,7 +543,9 @@ export const syncConfiguredRoute = async () => {
     const effectiveLastChangeAt = hasMoved ? now : lastChangeAtMs;
     const staleTicks = hasMoved ? 0 : Number(runtimeData.staleTicks ?? 0) + 1;
     const staleDurationMs = staleTicks * env.scheduler.selfCallIntervalMs;
-    const isRunning = staleDurationMs < env.scheduler.staleLocationMs;
+    const reachedStaleThreshold = staleDurationMs >= env.scheduler.staleLocationMs;
+    const previousStopIndex = Number(runtimeData.currentStopIndex ?? 0);
+    const isRunning = !reachedStaleThreshold;
     const lastUpdatedMs = runtimeData.updatedAt ? new Date(runtimeData.updatedAt).getTime() : now;
     const elapsedSeconds = Math.max((now - lastUpdatedMs) / 1000, 1);
     const speedKmh = Math.min((movedMeters / elapsedSeconds) * 3.6, 120);
@@ -417,7 +560,8 @@ export const syncConfiguredRoute = async () => {
     const exactStopMatch =
       routeStops[nearestStop.stop.index].latitude === latitude &&
       routeStops[nearestStop.stop.index].longitude === longitude;
-    const withinRouteArea = exactStopMatch || nearestStop.meters <= env.scheduler.routeProximityMeters;
+    const effectiveRouteProximityMeters = Math.max(env.scheduler.routeProximityMeters, 50);
+    const withinRouteArea = exactStopMatch || nearestStop.meters <= effectiveRouteProximityMeters;
 
     const roundTripState = updateRoundTripState({
       routeStops,
@@ -444,6 +588,7 @@ export const syncConfiguredRoute = async () => {
       longitude,
       speedKmh: Number(speedKmh.toFixed(1)),
       nearestStopDistanceMeters: Math.round(nearestStop.meters),
+      effectiveRouteProximityMeters,
       withinRouteArea,
       direction: roundTripState.direction,
       roundsCompleted: roundTripState.roundsCompleted,
@@ -466,6 +611,16 @@ export const syncConfiguredRoute = async () => {
       staleTicks,
       updatedAt: new Date().toISOString()
     };
+    const confidence = computeTrackingConfidence({
+      staleDurationMs,
+      movedMeters,
+      nearestStopDistanceMeters: Math.round(nearestStop.meters),
+      withinRouteArea,
+      isRunning
+    });
+    nextPayload.confidenceScore = confidence.score;
+    nextPayload.confidenceLevel = confidence.level;
+    const stationaryAtSameStop = previousStopIndex === roundTripState.currentStopIndex;
 
     const shouldWrite = shouldWriteRuntime(runtimeData, nextPayload);
     if (shouldWrite) {
@@ -486,9 +641,12 @@ export const syncConfiguredRoute = async () => {
     const currentBusStatus = nextPayload.status;
     if (currentBusStatus === "running" && previousBusStatus && previousBusStatus !== "running") {
       const allUsers = await getActiveUsersByRoute(route);
+      const notifiableUsers = allUsers.filter((u) =>
+        userAllowsEventNotification(u, "bus_started", now)
+      );
       const runningResult = await sendUsersNotification({
         routeId: route.id,
-        users: allUsers,
+        users: notifiableUsers,
         title: "Bus is on the way",
         body: `Bus ${route.busId} is now running on route ${route.routeNumber}.`,
         data: {
@@ -573,9 +731,13 @@ export const syncConfiguredRoute = async () => {
 
       for (const event of orderedEvents) {
         if (!event.users.length) continue;
+        const notifiableUsers = event.users.filter((u) =>
+          userAllowsEventNotification(u, event.key, now)
+        );
+        if (!notifiableUsers.length) continue;
         const result = await sendUsersNotification({
           routeId: route.id,
-          users: event.users,
+          users: notifiableUsers,
           title: event.title,
           body: event.body,
           data: { type: event.key, stopIndex, direction: roundTripState.direction }
@@ -603,13 +765,21 @@ export const syncConfiguredRoute = async () => {
       });
     }
 
+    const shouldUseIdleCooldown =
+      !hasMoved &&
+      reachedStaleThreshold &&
+      stationaryAtSameStop &&
+      env.scheduler.idlePollingCooldownMs > env.scheduler.selfCallIntervalMs &&
+      staleDurationMs >= env.scheduler.idlePollingStartMs;
+
     return {
       ok: true,
       routeId: route.id,
       busId: route.busId,
       stopIndex: roundTripState.currentStopIndex,
       direction: roundTripState.direction,
-      status: nextPayload.status
+      status: nextPayload.status,
+      cooldownMs: shouldUseIdleCooldown ? env.scheduler.idlePollingCooldownMs : 0
     };
   } finally {
     if (lockedRouteId) {
