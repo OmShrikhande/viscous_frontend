@@ -527,6 +527,27 @@ export const syncConfiguredRoute = async () => {
     }
     acquiredRuntimeRef = runtimeRef;
 
+    // Apply Daily Reset if needed (Home -> College at start of day)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(Date.now() + istOffset);
+    const istHour = istNow.getUTCHours();
+    const istDate = istNow.toISOString().split("T")[0];
+
+    let effectiveRuntimeData = runtimeData;
+    if (istHour >= 4 && runtimeData.lastResetDate !== istDate) {
+      logger.info("Applying daily route reset", { routeId: route.id, istDate });
+      effectiveRuntimeData = {
+        ...runtimeData,
+        direction: 1,
+        currentStopIndex: 0,
+        roundsCompleted: 0,
+        lastResetDate: istDate,
+        lastNotifiedKey: "",
+        status: "stop",
+        busStatus: "stop"
+      };
+    }
+
     const realtimeSnapshot = await realtimeDb.ref(`/${route.busId}`).get();
     const realtimeData = realtimeSnapshot.val();
     if (!realtimeData) {
@@ -541,24 +562,24 @@ export const syncConfiguredRoute = async () => {
 
     const now = Date.now();
 
-    const prevLat = Number(runtimeData.latitude ?? latitude);
-    const prevLng = Number(runtimeData.longitude ?? longitude);
+    const prevLat = Number(effectiveRuntimeData.latitude ?? latitude);
+    const prevLng = Number(effectiveRuntimeData.longitude ?? longitude);
     const movedMeters = distanceMeters(prevLat, prevLng, latitude, longitude);
-    const lastChangeAtMs = Number(runtimeData.lastChangeAtMs ?? now);
+    const lastChangeAtMs = Number(effectiveRuntimeData.lastChangeAtMs ?? now);
     const hasMoved = movedMeters >= env.scheduler.movementThresholdMeters;
     const effectiveLastChangeAt = hasMoved ? now : lastChangeAtMs;
-    const staleTicks = hasMoved ? 0 : Number(runtimeData.staleTicks ?? 0) + 1;
+    const staleTicks = hasMoved ? 0 : Number(effectiveRuntimeData.staleTicks ?? 0) + 1;
     const staleDurationMs = staleTicks * env.scheduler.selfCallIntervalMs;
     const reachedStaleThreshold = staleDurationMs >= env.scheduler.staleLocationMs;
-    const previousStopIndex = Number(runtimeData.currentStopIndex ?? 0);
+    const previousStopIndex = Number(effectiveRuntimeData.currentStopIndex ?? 0);
     const isRunning = !reachedStaleThreshold;
-    const lastUpdatedMs = runtimeData.updatedAt ? new Date(runtimeData.updatedAt).getTime() : now;
+    const lastUpdatedMs = effectiveRuntimeData.updatedAt ? new Date(effectiveRuntimeData.updatedAt).getTime() : now;
     const elapsedSeconds = Math.max((now - lastUpdatedMs) / 1000, 1);
 
     // Smoothed speed (km/h): blend instantaneous reading with previous so a single
     // GPS jitter doesn't whip the gauge around.
     const instantSpeedKmh = Math.min((movedMeters / elapsedSeconds) * 3.6, 120);
-    const prevSpeedKmh = Number(runtimeData.speedKmh ?? 0);
+    const prevSpeedKmh = Number(effectiveRuntimeData.speedKmh ?? 0);
     const smoothedSpeedKmh = isRunning
       ? Number((prevSpeedKmh * 0.55 + instantSpeedKmh * 0.45).toFixed(1))
       : 0;
@@ -578,7 +599,7 @@ export const syncConfiguredRoute = async () => {
 
     const roundTripState = updateRoundTripState({
       routeStops,
-      runtimeData,
+      runtimeData: effectiveRuntimeData,
       nearestStopIndex: nearestStop.stop.index,
       withinRouteArea
     });
@@ -655,8 +676,8 @@ export const syncConfiguredRoute = async () => {
     // ── Run notification logic BEFORE the single batched write so we can fold
     //    the lastNotifiedKey update into the same Firestore commit. ──
     const notificationKey = `${roundTripState.direction}:${roundTripState.currentStopIndex}`;
-    const previousNotificationKey = runtimeData.lastNotifiedKey ?? "";
-    const previousBusStatus = String(runtimeData.status ?? runtimeData.busStatus ?? "").toLowerCase();
+    const previousNotificationKey = effectiveRuntimeData.lastNotifiedKey ?? "";
+    const previousBusStatus = String(effectiveRuntimeData.status ?? effectiveRuntimeData.busStatus ?? "").toLowerCase();
     const currentBusStatus = nextPayload.status;
     let notifiedKeyChanged = false;
 
@@ -783,7 +804,7 @@ export const syncConfiguredRoute = async () => {
 
     // ── Single combined write per cycle: state + lock release + (optional)
     //    bus status doc + (optional) lastNotifiedKey. ──
-    const shouldWriteState = shouldWriteRuntime(runtimeData, nextPayload);
+    const shouldWriteState = shouldWriteRuntime(effectiveRuntimeData, nextPayload);
     const statusChanged = previousBusStatus !== currentBusStatus;
     const writePayload = {
       lockUntilMs: 0 // always release lock
