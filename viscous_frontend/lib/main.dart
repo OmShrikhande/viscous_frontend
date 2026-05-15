@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -17,18 +18,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
 
-  // Lock to portrait for a cleaner mobile experience
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
-  // Firebase is not configured for web yet — skip gracefully.
+  // Firebase is not configured for web yet — skip gracefully so the
+  // Flutter UI still runs. Wire up firebase_options.dart when ready.
   try {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   } catch (e) {
-    debugPrint('[main] Firebase init skipped on this platform: $e');
+    // ignore: avoid_print
+    print('[main] Firebase init skipped on this platform: $e');
   }
 
   final storageService = StorageService();

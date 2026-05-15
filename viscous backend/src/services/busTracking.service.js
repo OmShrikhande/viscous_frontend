@@ -432,6 +432,8 @@ const shouldWriteRuntime = (previous, next) => {
   if (previous.currentStopIndex !== next.currentStopIndex) return true;
   if (previous.direction !== next.direction) return true;
   if (previous.status !== next.status) return true;
+  if (previous.lastResetDate !== next.lastResetDate) return true;
+  if (previous.hasStartedDailyTrip !== next.hasStartedDailyTrip) return true;
   return false;
 };
 
