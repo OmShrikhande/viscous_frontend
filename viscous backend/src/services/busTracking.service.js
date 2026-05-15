@@ -542,8 +542,8 @@ export const syncConfiguredRoute = async () => {
     let effectiveRuntimeData = runtimeData;
     if (istHour >= 4 && runtimeData.lastResetDate !== istDate) {
       logger.info("Applying daily route reset", { routeId: route.id, istDate });
-      effectiveRuntimeData = {
-        ...runtimeData,
+      
+      const resetPayload = {
         direction: 1,
         currentStopIndex: 0,
         roundsCompleted: 0,
@@ -551,7 +551,25 @@ export const syncConfiguredRoute = async () => {
         lastNotifiedKey: "",
         status: "stop",
         busStatus: "stop",
-        hasStartedDailyTrip: false
+        hasStartedDailyTrip: false,
+        latitude: null,
+        longitude: null,
+        speedKmh: 0,
+        staleTicks: 0
+      };
+
+      // 1. Immediately save the clean reset state to Firestore
+      await acquiredRuntimeRef.set(resetPayload, { merge: true });
+      
+      // 2. Delete the stale realtime GPS data to prevent snapping to yesterday's location
+      await realtimeDb.ref(`/${route.busId}`).remove();
+      
+      return { 
+        ok: true, 
+        reason: "Daily reset applied and realtime data cleared",
+        routeId: route.id,
+        direction: 1,
+        stopIndex: 0
       };
     }
 
