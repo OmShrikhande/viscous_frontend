@@ -399,7 +399,11 @@ const updateRoundTripState = ({ routeStops, runtimeData, nearestStopIndex, withi
   if (withinRouteArea) {
     // Snap to nearest in-range stop so runtime state cannot get stuck
     // at an endpoint when GPS already moved near a middle stop.
-    currentStopIndex = nearestStopIndex;
+    // Prevent snapping to the end of the route if the daily reset just happened 
+    // and the bus hasn't started its daily trip yet.
+    if (runtimeData.hasStartedDailyTrip !== false || nearestStopIndex === 0) {
+      currentStopIndex = nearestStopIndex;
+    }
   }
 
   if (currentStopIndex >= stopCount - 1 && direction === 1) {
@@ -544,7 +548,8 @@ export const syncConfiguredRoute = async () => {
         lastResetDate: istDate,
         lastNotifiedKey: "",
         status: "stop",
-        busStatus: "stop"
+        busStatus: "stop",
+        hasStartedDailyTrip: false
       };
     }
 
@@ -567,6 +572,11 @@ export const syncConfiguredRoute = async () => {
     const movedMeters = distanceMeters(prevLat, prevLng, latitude, longitude);
     const lastChangeAtMs = Number(effectiveRuntimeData.lastChangeAtMs ?? now);
     const hasMoved = movedMeters >= env.scheduler.movementThresholdMeters;
+    
+    if (hasMoved) {
+      effectiveRuntimeData.hasStartedDailyTrip = true;
+    }
+
     const effectiveLastChangeAt = hasMoved ? now : lastChangeAtMs;
     const staleTicks = hasMoved ? 0 : Number(effectiveRuntimeData.staleTicks ?? 0) + 1;
     const staleDurationMs = staleTicks * env.scheduler.selfCallIntervalMs;
