@@ -57,13 +57,8 @@ Server: `http://localhost:3000`
 - Impact: any client can call sync endpoint, causing load and potential state churn.
 - Fix: require key in production; reject startup without it.
 
-### P1-5: Frontend does not push FCM token to backend users
-- Frontend files: `lib/services/push_notification_service.dart` + no corresponding user token sync API usage
-- Backend notification send requires `users.fcmToken`.
-- Impact: stop notifications often never sent to real devices.
-- Fix:
-  - Add authenticated endpoint: `PATCH /api/v1/users/me/fcm-token`.
-  - On login/app start, frontend uploads current FCM token.
+### P1-5: Frontend does not push FCM token to backend users (RESOLVED)
+- Status: **RESOLVED**. Frontend `PushNotificationService` is fully integrated with `UserService().upsertFcmToken(token)` on authentication, ensuring backend can retrieve valid target tokens for multicast push delivery.
 
 ## Race conditions and consistency risks
 
@@ -141,3 +136,22 @@ Server: `http://localhost:3000`
 - Crossing a stop triggers exactly one notification event per user/event type.
 - Restart server does not duplicate previous stop notifications.
 - Android emulator can login + fetch route + fetch bus location using one shared base URL.
+
+---
+
+## Push Notification Proximity & Last-Stop Logic Fixes (May 2026)
+
+We audited and corrected two major logical bugs in the notification trigger loop inside `src/services/busTracking.service.js`:
+
+### 1. Direction-Aware Proximity Alerts
+* **Problem**: Proximity notifications were hardcoded to offsets (`stopIndex - 1` and `stopIndex + 1`) regardless of bus direction, which caused forward-moving buses to send "reaching soon" alerts to already-passed stops, and reverse-moving buses to send "one stop away" alerts to already-passed stops.
+* **Resolution**: Replaced static offsets with direction-aware calculations using `nextIndex = stopIndex + roundTripState.direction`. We also deduped delivery, routing users at `nextIndex` directly to `eta` or `one_stop_away` based on their preferred alert type to prevent double-notification.
+
+### 2. Direction-Aware Last Stop Detection
+* **Problem**: The end of journey alert (`route_last_stop`) only checked `stopIndex === routeStops.length - 1`. This failed to trigger at the end of reverse trips (Stop `0`) and sent false "arrived at last stop" notices at the start of reverse trips.
+* **Resolution**: Updated tracking payload state and triggers to use the direction-aware predicate:
+  ```javascript
+  const isLastStopOfJourney = (roundTripState.direction === 1 && stopIndex === routeStops.length - 1) ||
+                              (roundTripState.direction === -1 && stopIndex === 0);
+  ```
+

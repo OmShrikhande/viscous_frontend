@@ -687,7 +687,8 @@ export const syncConfiguredRoute = async () => {
       currentDisplayIndex: displayIndex,
       currentStop: currentStop?.name ?? null,
       nextStop: nextStop?.name ?? null,
-      isAtLastStop: roundTripState.currentStopIndex === routeStops.length - 1,
+      isAtLastStop: (roundTripState.direction === 1 && roundTripState.currentStopIndex === routeStops.length - 1) ||
+                    (roundTripState.direction === -1 && roundTripState.currentStopIndex === 0),
       lastChangeAtMs: effectiveLastChangeAt,
       staleTicks,
       updatedAt: new Date().toISOString()
@@ -751,22 +752,30 @@ export const syncConfiguredRoute = async () => {
         route_last_stop: []
       };
 
-      if (stopIndex === routeStops.length - 1) {
+      const isLastStopOfJourney = (roundTripState.direction === 1 && stopIndex === routeStops.length - 1) ||
+                                  (roundTripState.direction === -1 && stopIndex === 0);
+
+      if (isLastStopOfJourney) {
         eventBuckets.route_last_stop = users;
       } else {
+        const nextIndex = stopIndex + roundTripState.direction;
         for (const user of users) {
           const userStopIndex = userIndexMap.get(user.id) ?? -1;
           if (userStopIndex === stopIndex) {
             eventBuckets.reached.push(user);
-          } else if (userStopIndex === stopIndex - 1) {
-            eventBuckets.eta.push(user);
-          } else if (userStopIndex === stopIndex + 1) {
-            eventBuckets.one_stop_away.push(user);
+          } else if (userStopIndex === nextIndex) {
+            // Target the true upcoming stop index cleanly based on user preference to avoid double alerts
+            const prefs = getUserNotificationPreferences(user);
+            if (prefs.notifyEta) {
+              eventBuckets.eta.push(user);
+            } else if (prefs.notifyOneStopAway) {
+              eventBuckets.one_stop_away.push(user);
+            }
           }
         }
       }
 
-      const orderedEvents = stopIndex === routeStops.length - 1
+      const orderedEvents = isLastStopOfJourney
         ? [
             {
               key: "route_last_stop",
