@@ -414,20 +414,23 @@ class TrackingController extends StateNotifier<TrackingState> {
       // stop, restart at 0; otherwise preserve smoothly-advancing client value.
       final initialProgress = segmentChanged ? 0.0 : state.progressToNextStop;
 
+      final stopsList = orderedStops.isEmpty
+          ? (stops.isEmpty ? state.stops : stops)
+          : orderedStops;
+      final stopCount = stopsList.length;
+
+      final displayCurrentIndex = (direction == -1 && stopCount > 0)
+          ? (stopCount - 1 - currentStopIndex).clamp(0, stopCount - 1)
+          : currentStopIndex.clamp(0, stopCount > 0 ? stopCount - 1 : 0);
+
+      final displayNextIndex = (direction == -1 && stopCount > 0)
+          ? (stopCount - 1 - nextStopIndex).clamp(0, stopCount - 1)
+          : nextStopIndex.clamp(0, stopCount > 0 ? stopCount - 1 : 0);
+
       state = state.copyWith(
-        stops: orderedStops.isEmpty
-            ? (stops.isEmpty ? state.stops : stops)
-            : orderedStops,
-        currentStopIndex: currentStopIndex.clamp(
-          0,
-          stops.isEmpty ? 0 : stops.length - 1,
-        ),
-        nextStopIndex: nextStopIndex.clamp(
-          0,
-          (orderedStops.isEmpty ? stops : orderedStops).isEmpty
-              ? 0
-              : (orderedStops.isEmpty ? stops : orderedStops).length - 1,
-        ),
+        stops: stopsList,
+        currentStopIndex: displayCurrentIndex,
+        nextStopIndex: displayNextIndex,
         busPosition: newPos,
         kmh: speedKmh,
         etaSeconds: etaSeconds,
@@ -442,9 +445,7 @@ class TrackingController extends StateNotifier<TrackingState> {
             (data['roundsCompleted'] as num?)?.toInt() ?? state.roundsCompleted,
         currentDisplayIndex: displayIndex.clamp(
           0,
-          (orderedStops.isEmpty ? stops : orderedStops).isEmpty
-              ? 0
-              : (orderedStops.isEmpty ? stops : orderedStops).length - 1,
+          stopsList.isEmpty ? 0 : stopsList.length - 1,
         ),
         routeMeta: routeMeta,
         progressToNextStop: initialProgress,

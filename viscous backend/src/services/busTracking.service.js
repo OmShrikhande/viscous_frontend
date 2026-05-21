@@ -752,8 +752,9 @@ export const syncConfiguredRoute = async () => {
         route_last_stop: []
       };
 
-      const isLastStopOfJourney = (roundTripState.direction === 1 && stopIndex === routeStops.length - 1) ||
-                                  (roundTripState.direction === -1 && stopIndex === 0);
+      const prevDirection = effectiveRuntimeData.direction === -1 ? -1 : 1;
+      const isLastStopOfJourney = (prevDirection === 1 && stopIndex === routeStops.length - 1) ||
+                                  (prevDirection === -1 && stopIndex === 0);
 
       if (isLastStopOfJourney) {
         eventBuckets.route_last_stop = users;

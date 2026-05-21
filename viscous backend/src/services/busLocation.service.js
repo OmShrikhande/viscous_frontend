@@ -2,26 +2,31 @@ import { firestoreDb, realtimeDb } from "../config/firebaseAdmin.js";
 
 // Cache to store previous positions for speed calculation
 const positionCache = new Map();
+const BUS_LOCATION_KEYS = {
+  latitude: "latitude",
+  longitude: "longitude"
+};
 
-export const getBusLocation = async (busId) => {
+export const getBusLocation = async (busKey) => {
   try {
-    // Fetch current location from realtime database
-    const snapshot = await realtimeDb.ref(`/${busId}`).get();
+    // Fetch current location from realtime database under the bus key node
+    const busPath = `/${busKey}`;
+    const snapshot = await realtimeDb.ref(busPath).get();
     const locationData = snapshot.val();
 
     if (!locationData) {
-      throw new Error(`No location data found for bus ${busId}`);
+      throw new Error(`No location data found at Realtime DB path ${busPath}`);
     }
 
-    const latitude = Number(locationData.latitude);
-    const longitude = Number(locationData.longitude);
+    const latitude = Number(locationData[BUS_LOCATION_KEYS.latitude]);
+    const longitude = Number(locationData[BUS_LOCATION_KEYS.longitude]);
     const timestamp = Date.now();
 
     // Calculate speed
-    const speedKmh = calculateSpeed(busId, latitude, longitude, timestamp);
+    const speedKmh = calculateSpeed(busKey, latitude, longitude, timestamp);
 
     // Update cache with current position
-    positionCache.set(busId, {
+    positionCache.set(busKey, {
       latitude,
       longitude,
       timestamp
@@ -32,7 +37,7 @@ export const getBusLocation = async (busId) => {
       longitude,
       speedKmh,
       timestamp,
-      busId,
+      busKey,
       isStale: false // You can implement staleness logic if needed
     };
   } catch (error) {
@@ -64,8 +69,8 @@ export const getBusIdFromRoute = async (routeNumber) => {
   }
 };
 
-function calculateSpeed(busId, currentLat, currentLng, currentTimestamp) {
-  const previousPosition = positionCache.get(busId);
+function calculateSpeed(busKey, currentLat, currentLng, currentTimestamp) {
+  const previousPosition = positionCache.get(busKey);
 
   if (!previousPosition) {
     // No previous position, can't calculate speed
