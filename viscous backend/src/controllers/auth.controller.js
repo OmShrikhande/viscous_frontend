@@ -12,9 +12,12 @@ export const login = async (req, res) => {
       });
     }
 
+    // Normalize incoming phone number (strip spaces, dashes, parentheses)
+    const normalizedPhone = String(phone).replace(/[\s\-\(\)]/g, "");
+
     // Query Firestore for user with matching phone
     const usersRef = firestoreDb.collection('users');
-    const querySnapshot = await usersRef.where('phone', '==', phone).limit(1).get();
+    const querySnapshot = await usersRef.where('phone', '==', normalizedPhone).limit(1).get();
 
     if (querySnapshot.empty) {
       return res.status(401).json({

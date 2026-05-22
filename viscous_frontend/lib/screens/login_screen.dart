@@ -56,15 +56,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     try {
       final authService = AuthService();
-      final response = await authService.login(_phoneController.text.trim());
+      // Clean phone number (strip spaces, dashes, parentheses)
+      final phone = _phoneController.text.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+      final response = await authService.login(phone);
       await _storageService.saveLoginData(response);
       ref.read(authStateProvider.notifier).state = true;
       if (mounted) context.go('/app');
     } catch (e) {
       if (mounted) {
+        String errorMsg = e.toString();
+        if (errorMsg.startsWith('Exception: ')) {
+          errorMsg = errorMsg.substring('Exception: '.length);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Login failed. Please check your credentials.'),
+            content: Text(errorMsg),
             backgroundColor: const Color(0xFFDC2626),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -313,7 +319,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   isDark: isDark,
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Phone number is required';
-                    if (!RegExp(r'^\+?[0-9]{7,15}$').hasMatch(v.trim())) {
+                    // Allow spaces, dashes, parentheses in UI but validate the cleaned digits
+                    final cleaned = v.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+                    if (!RegExp(r'^\+?[0-9]{7,15}$').hasMatch(cleaned)) {
                       return 'Enter a valid phone number';
                     }
                     return null;
