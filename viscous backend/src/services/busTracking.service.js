@@ -540,6 +540,7 @@ export const syncConfiguredRoute = async () => {
     const istDate = istNow.toISOString().split("T")[0];
 
     let effectiveRuntimeData = runtimeData;
+    const wasDailyTripStarted = effectiveRuntimeData.hasStartedDailyTrip === true;
     if (istHour >= 4 && runtimeData.lastResetDate !== istDate) {
       logger.info("Applying daily route reset", { routeId: route.id, istDate });
       
@@ -602,7 +603,8 @@ export const syncConfiguredRoute = async () => {
     const staleDurationMs = staleTicks * env.scheduler.selfCallIntervalMs;
     const reachedStaleThreshold = staleDurationMs >= env.scheduler.staleLocationMs;
     const previousStopIndex = Number(effectiveRuntimeData.currentStopIndex ?? 0);
-    const isRunning = !reachedStaleThreshold;
+    // The bus is only considered running if it has started its daily trip and location is not stale
+    const isRunning = effectiveRuntimeData.hasStartedDailyTrip === true && !reachedStaleThreshold;
     const lastUpdatedMs = effectiveRuntimeData.updatedAt ? new Date(effectiveRuntimeData.updatedAt).getTime() : now;
     const elapsedSeconds = Math.max((now - lastUpdatedMs) / 1000, 1);
 
@@ -662,6 +664,7 @@ export const syncConfiguredRoute = async () => {
       busId: route.busId,
       status: isRunning ? "running" : "stop",
       busStatus: isRunning ? "running" : "stop",
+      hasStartedDailyTrip: effectiveRuntimeData.hasStartedDailyTrip ?? false,
       latitude,
       longitude,
       speedKmh: smoothedSpeedKmh,
@@ -712,7 +715,9 @@ export const syncConfiguredRoute = async () => {
     const currentBusStatus = nextPayload.status;
     let notifiedKeyChanged = false;
 
-    if (currentBusStatus === "running" && previousBusStatus && previousBusStatus !== "running") {
+    const isStartingTripNow = effectiveRuntimeData.hasStartedDailyTrip === true && !wasDailyTripStarted;
+
+    if (isStartingTripNow) {
       const allUsers = await getActiveUsersByRoute(route);
       const notifiableUsers = allUsers.filter((u) =>
         userAllowsEventNotification(u, "bus_started", now)
