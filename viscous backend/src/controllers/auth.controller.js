@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { firestoreDb } from '../config/firebaseAdmin.js';
+import { dbA, dbB } from '../config/firebaseAdmin.js';
 
 export const login = async (req, res) => {
   try {
@@ -15,9 +15,15 @@ export const login = async (req, res) => {
     // Normalize incoming phone number (strip spaces, dashes, parentheses)
     const normalizedPhone = String(phone).replace(/[\s\-\(\)]/g, "");
 
-    // Query Firestore for user with matching phone
-    const usersRef = firestoreDb.collection('users');
-    const querySnapshot = await usersRef.where('phone', '==', normalizedPhone).limit(1).get();
+    // Query Project A Firestore for user with matching phone
+    let querySnapshot = await dbA.firestoreDb.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
+    let fleet = 'A';
+
+    // If not found in Project A and Project B is configured and different, search Project B
+    if (querySnapshot.empty && dbB !== dbA) {
+      querySnapshot = await dbB.firestoreDb.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
+      fleet = 'B';
+    }
 
     if (querySnapshot.empty) {
       return res.status(401).json({
@@ -30,20 +36,22 @@ export const login = async (req, res) => {
     const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
     
-    // Create user object with id
+    // Create user object with id and fleet
     const user = {
       id: userDoc.id,
+      fleet,
       ...userData
     };
 
-    // Generate JWT token
+    // Generate JWT token including fleet
     const token = jwt.sign(
       { 
         userId: user.id,
         phone: user.phone,
         role: user.role,
         route: user.route,
-        userstop: user.userstop ?? null
+        userstop: user.userstop ?? null,
+        fleet: user.fleet
       },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '7d' }

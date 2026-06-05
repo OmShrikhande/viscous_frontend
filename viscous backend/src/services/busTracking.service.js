@@ -1,4 +1,4 @@
-import { firestoreDb, realtimeDb } from "../config/firebaseAdmin.js";
+import { dbA, dbB, getDbForFleet } from "../config/firebaseAdmin.js";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 
@@ -6,7 +6,8 @@ const routeCache = new Map();
 const usersCache = new Map();
 /** routeId -> { payload, cachedAt } — shared across users on the same route (reduces read bursts). */
 const trackingSnapshotCache = new Map();
-let isSyncRunning = false;
+/** Per-route sync lock: prevents the same route from overlapping itself */
+const syncingRoutes = new Set();
 
 const ROUTE_CACHE_TTL_MS = 60_000;
 const USERS_CACHE_TTL_MS = 30_000;
@@ -163,21 +164,33 @@ const computeTrackingConfidence = ({
   return { score, level };
 };
 
-const getRouteByNumber = async (routeNumber) => {
+export const getRouteByNumber = async (routeNumber) => {
   const cacheHit = routeCache.get(routeNumber);
   if (cacheHit && Date.now() - cacheHit.cachedAt < ROUTE_CACHE_TTL_MS) {
     return cacheHit.route;
   }
 
-  const routeSnap = await firestoreDb
+  // Search Project A
+  let routeSnap = await dbA.firestoreDb
     .collection("routes")
     .where("routeNumber", "==", routeNumber)
     .limit(1)
     .get();
+  let fleet = 'A';
+
+  // If empty and Project B is configured and different, search Project B
+  if (routeSnap.empty && dbB !== dbA) {
+    routeSnap = await dbB.firestoreDb
+      .collection("routes")
+      .where("routeNumber", "==", routeNumber)
+      .limit(1)
+      .get();
+    fleet = 'B';
+  }
 
   if (routeSnap.empty) return null;
   const routeDoc = routeSnap.docs[0];
-  const route = { id: routeDoc.id, ...routeDoc.data() };
+  const route = { id: routeDoc.id, fleet, ...routeDoc.data() };
   routeCache.set(routeNumber, { route, cachedAt: Date.now() });
   return route;
 };
@@ -191,7 +204,9 @@ const getActiveUsersByRoute = async (route) => {
     return cacheHit.users;
   }
 
-  const activeByRouteIdSnap = await firestoreDb
+  const db = getDbForFleet(route.fleet);
+
+  const activeByRouteIdSnap = await db.firestoreDb
     .collection("users")
     .where("route", "==", routeId)
     .where("status", "==", "active")
@@ -200,7 +215,7 @@ const getActiveUsersByRoute = async (route) => {
   // Backward compatibility: some users store routeNumber instead of route document id.
   let activeByRouteNumberSnap = null;
   if (routeNumber) {
-    activeByRouteNumberSnap = await firestoreDb
+    activeByRouteNumberSnap = await db.firestoreDb
       .collection("users")
       .where("route", "==", routeNumber)
       .where("status", "==", "active")
@@ -222,7 +237,7 @@ const getActiveUsersByRoute = async (route) => {
   return users;
 };
 
-const sendUsersNotification = async ({ routeId, title, body, users, data = {} }) => {
+const sendUsersNotification = async ({ routeId, title, body, users, fleet, data = {} }) => {
   if (!users.length) {
     return {
       attemptedUsers: 0,
@@ -269,7 +284,8 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
   }
 
   try {
-    const app = (await import("firebase-admin/app")).getApp();
+    const { getApp } = await import("firebase-admin/app");
+    const app = fleet === "B" ? getApp("appB") : getApp();
     const messaging = (await import("firebase-admin/messaging")).getMessaging(app);
     const response = await messaging.sendEachForMulticast({
       notification: { title, body },
@@ -304,7 +320,8 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
     });
 
     if (invalidTokenOwners.size > 0) {
-      const cleanupBatch = firestoreDb.batch();
+      const db = getDbForFleet(fleet);
+      const cleanupBatch = db.firestoreDb.batch();
       for (const [userId, invalidTokens] of invalidTokenOwners.entries()) {
         const user = users.find((u) => u.id === userId);
         if (!user) continue;
@@ -319,7 +336,7 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
           )
         );
         cleanupBatch.set(
-          firestoreDb.collection("users").doc(userId),
+          db.firestoreDb.collection("users").doc(userId),
           {
             fcmTokens: cleaned,
             fcmToken: cleaned[0] ?? null,
@@ -364,8 +381,9 @@ const sendUsersNotification = async ({ routeId, title, body, users, data = {} })
  * Returns { acquired, runtimeData, runtimeRef } so the caller can reuse the
  * runtime payload without a second read.
  */
-const acquireRouteLockAndRuntime = async (routeId) => {
-  const runtimeRef = firestoreDb.collection("route_runtime").doc(routeId);
+const acquireRouteLockAndRuntime = async (routeId, fleet) => {
+  const db = getDbForFleet(fleet);
+  const runtimeRef = db.firestoreDb.collection("route_runtime").doc(routeId);
   const now = Date.now();
   // Hold the lock just long enough to cover one cycle plus a small buffer.
   const lockUntilMs = now + Math.max(env.scheduler.selfCallIntervalMs + 1_000, 7_000);
@@ -373,7 +391,7 @@ const acquireRouteLockAndRuntime = async (routeId) => {
   let acquired = false;
   let runtimeData = {};
 
-  await firestoreDb.runTransaction(async (tx) => {
+  await db.firestoreDb.runTransaction(async (tx) => {
     const doc = await tx.get(runtimeRef);
     const data = doc.exists ? doc.data() : {};
     const currentLockUntil = Number(data?.lockUntilMs ?? 0);
@@ -452,15 +470,16 @@ const buildSnapshotPayload = (runtimeData, routeStops, routeMeta) => {
   };
 };
 
-const fetchSnapshotBaseFromFirestore = async (routeId) => {
-  const runtimeDoc = await firestoreDb.collection("route_runtime").doc(routeId).get();
+const fetchSnapshotBaseFromFirestore = async (routeId, fleet) => {
+  const db = getDbForFleet(fleet);
+  const runtimeDoc = await db.firestoreDb.collection("route_runtime").doc(routeId).get();
   const runtimeData = runtimeDoc.exists ? runtimeDoc.data() : {};
   const runtimeStops = Array.isArray(runtimeData.routeStops) ? runtimeData.routeStops : [];
   let routeStops = runtimeStops;
   let routeMeta = runtimeData.routeMeta;
 
   if (!routeStops.length || !routeMeta) {
-    const routeDoc = await firestoreDb.collection("routes").doc(routeId).get();
+    const routeDoc = await db.firestoreDb.collection("routes").doc(routeId).get();
     if (!routeDoc.exists) {
       throw new Error("Route not found for current user");
     }
@@ -479,7 +498,7 @@ const fetchSnapshotBaseFromFirestore = async (routeId) => {
   return buildSnapshotPayload(runtimeData, routeStops, routeMeta);
 };
 
-export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
+export const getTrackingSnapshotForUser = async ({ routeId, userStop, fleet }) => {
   const ttl = env.trackingSnapshotCacheTtlMs;
   const now = Date.now();
   const cached = trackingSnapshotCache.get(routeId);
@@ -487,7 +506,7 @@ export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
     cached && now - cached.cachedAt < ttl ? cached.payload : null;
 
   if (!base) {
-    base = await fetchSnapshotBaseFromFirestore(routeId);
+    base = await fetchSnapshotBaseFromFirestore(routeId, fleet);
     trackingSnapshotCache.set(routeId, { payload: base, cachedAt: now });
   }
 
@@ -501,33 +520,67 @@ export const getTrackingSnapshotForUser = async ({ routeId, userStop }) => {
   };
 };
 
-export const syncConfiguredRoute = async () => {
-  if (isSyncRunning) {
-    return { skipped: true, reason: "sync already running" };
+/**
+ * Fetch ALL routes from both Firebase projects (A and B).
+ * Returns an array of route objects, each with a `fleet` field.
+ */
+export const getAllRoutes = async () => {
+  const results = [];
+
+  // Fetch from Project A
+  try {
+    const snapA = await dbA.firestoreDb.collection("routes").get();
+    for (const doc of snapA.docs) {
+      results.push({ id: doc.id, fleet: 'A', ...doc.data() });
+    }
+    logger.info(`[Fleet A] Loaded ${snapA.size} routes from Project A`);
+  } catch (err) {
+    logger.error('[Fleet A] Failed to fetch routes', { error: err.message });
   }
-  isSyncRunning = true;
+
+  // Fetch from Project B (if different from A)
+  if (dbB !== dbA) {
+    try {
+      const snapB = await dbB.firestoreDb.collection("routes").get();
+      for (const doc of snapB.docs) {
+        results.push({ id: doc.id, fleet: 'B', ...doc.data() });
+      }
+      logger.info(`[Fleet B] Loaded ${snapB.size} routes from Project B`);
+    } catch (err) {
+      logger.error('[Fleet B] Failed to fetch routes', { error: err.message });
+    }
+  }
+
+  return results;
+};
+
+/**
+ * Sync a single route object (already resolved — not looked up from env).
+ * This is the core sync logic, extracted so it can run per-route in parallel.
+ */
+export const syncSingleRoute = async (route) => {
+  if (syncingRoutes.has(route.id)) {
+    return { skipped: true, reason: `sync already running for route ${route.routeNumber}` };
+  }
+  syncingRoutes.add(route.id);
 
   let acquiredRuntimeRef = null;
   try {
-    const routeNumber = env.scheduler.routeNumber;
-    if (!routeNumber) {
-      return { skipped: true, reason: "missing ROUTE_NUMBER env" };
-    }
-    const route = await getRouteByNumber(routeNumber);
-    if (!route) {
-      return { skipped: true, reason: `route not found: ${routeNumber}` };
-    }
     if (!route.busId) {
-      return { skipped: true, reason: `route ${routeNumber} has no busId` };
+      return { skipped: true, reason: `route ${route.routeNumber} has no busId` };
     }
+    // Invalidate route cache so fresh data is used next cycle
+    routeCache.delete(route.routeNumber);
 
     const routeStops = (route.stops ?? []).map(normalizeStop);
     if (!routeStops.length) {
-      return { skipped: true, reason: "route has no stops" };
+      return { skipped: true, reason: `route ${route.routeNumber} has no stops` };
     }
 
+    const db = getDbForFleet(route.fleet);
+
     // Single transaction: acquire lock + read runtime data (was 2 separate ops).
-    const { acquired, runtimeData, runtimeRef } = await acquireRouteLockAndRuntime(route.id);
+    const { acquired, runtimeData, runtimeRef } = await acquireRouteLockAndRuntime(route.id, route.fleet);
     if (!acquired) {
       return { skipped: true, reason: "route sync lock busy" };
     }
@@ -563,7 +616,7 @@ export const syncConfiguredRoute = async () => {
       await acquiredRuntimeRef.set(resetPayload, { merge: true });
       
       // 2. Delete the stale realtime GPS data to prevent snapping to yesterday's location
-      await realtimeDb.ref(`/${route.busId}`).remove();
+      await db.realtimeDb.ref(`/${route.busId}`).remove();
       
       return { 
         ok: true, 
@@ -574,7 +627,7 @@ export const syncConfiguredRoute = async () => {
       };
     }
 
-    const realtimeSnapshot = await realtimeDb.ref(`/${route.busId}`).get();
+    const realtimeSnapshot = await db.realtimeDb.ref(`/${route.busId}`).get();
     const realtimeData = realtimeSnapshot.val();
     if (!realtimeData) {
       return { skipped: true, reason: `missing realtime location for ${route.busId}` };
@@ -725,6 +778,7 @@ export const syncConfiguredRoute = async () => {
       const runningResult = await sendUsersNotification({
         routeId: route.id,
         users: notifiableUsers,
+        fleet: route.fleet,
         title: "Bus is on the way",
         body: `Bus ${route.busId} is now running on route ${route.routeNumber}.`,
         data: {
@@ -825,6 +879,7 @@ export const syncConfiguredRoute = async () => {
         const result = await sendUsersNotification({
           routeId: route.id,
           users: notifiableUsers,
+          fleet: route.fleet,
           title: event.title,
           body: event.body,
           data: { type: event.key, stopIndex, direction: roundTripState.direction }
@@ -864,10 +919,10 @@ export const syncConfiguredRoute = async () => {
     // Always at least 1 write to release the lock; coalesces with state when present.
     if (statusChanged) {
       // Only touch buses/{busId} when status actually flipped (was: every cycle).
-      const batch = firestoreDb.batch();
+      const batch = db.firestoreDb.batch();
       batch.set(runtimeRef, writePayload, { merge: true });
       batch.set(
-        firestoreDb.collection("buses").doc(route.busId),
+        db.firestoreDb.collection("buses").doc(route.busId),
         { status: nextPayload.status, updatedAt: nextPayload.updatedAt },
         { merge: true }
       );
@@ -902,9 +957,39 @@ export const syncConfiguredRoute = async () => {
       try {
         await acquiredRuntimeRef.set({ lockUntilMs: 0 }, { merge: true });
       } catch (error) {
-        logger.error("Failed to release route lock after error", { error: error.message });
+        logger.error("Failed to release route lock after error", { routeId: route.id, error: error.message });
       }
     }
-    isSyncRunning = false;
+    syncingRoutes.delete(route.id);
   }
 };
+
+/**
+ * Sync ALL routes from both Firebase projects in parallel.
+ * Each route runs independently — a failure on one does not affect others.
+ */
+export const syncAllRoutes = async () => {
+  const routes = await getAllRoutes();
+  if (!routes.length) {
+    return { skipped: true, reason: 'no routes found in any Firebase project' };
+  }
+
+  const results = await Promise.allSettled(
+    routes.map((route) => syncSingleRoute(route))
+  );
+
+  const summary = results.map((r, i) => ({
+    route: routes[i].routeNumber,
+    fleet: routes[i].fleet,
+    busId: routes[i].busId,
+    ...(r.status === 'fulfilled' ? r.value : { error: r.reason?.message })
+  }));
+
+  const ok = summary.filter(s => s.ok).length;
+  const skipped = summary.filter(s => s.skipped).length;
+  const failed = summary.filter(s => s.error).length;
+
+  logger.info('Parallel route sync completed', { total: routes.length, ok, skipped, failed });
+  return { ok: true, total: routes.length, synced: ok, skipped, failed, routes: summary };
+};
+

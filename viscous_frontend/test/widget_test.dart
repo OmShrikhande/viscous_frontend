@@ -6,7 +6,8 @@ import 'package:viscous_frontend/main.dart';
 void main() {
   testWidgets('shows OTP login screen', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: BusTrackerApp()));
-    expect(find.text('Track Your Child\'s Bus'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
+    expect(find.text('VISCOUS'), findsOneWidget);
+    expect(find.text('SECURE LOGIN'), findsOneWidget);
   });
 }
+

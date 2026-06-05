@@ -1,4 +1,4 @@
-import { firestoreDb, realtimeDb } from "../config/firebaseAdmin.js";
+import { getDbForFleet, realtimeDb } from "../config/firebaseAdmin.js";
 
 // Cache to store previous positions for speed calculation
 const positionCache = new Map();
@@ -7,11 +7,17 @@ const BUS_LOCATION_KEYS = {
   longitude: "longitude"
 };
 
-export const getBusLocation = async (busKey) => {
+/**
+ * Fetch the current GPS location for a bus from the correct fleet's Realtime Database.
+ * @param {string} busKey - The bus identifier (e.g. 'MH40BG2205')
+ * @param {string} [fleet='A'] - The fleet identifier ('A' or 'B')
+ */
+export const getBusLocation = async (busKey, fleet = 'A') => {
   try {
+    const db = getDbForFleet(fleet);
     // Fetch current location from realtime database under the bus key node
     const busPath = `/${busKey}`;
-    const snapshot = await realtimeDb.ref(busPath).get();
+    const snapshot = await db.realtimeDb.ref(busPath).get();
     const locationData = snapshot.val();
 
     if (!locationData) {
@@ -38,18 +44,33 @@ export const getBusLocation = async (busKey) => {
       speedKmh,
       timestamp,
       busKey,
-      isStale: false // You can implement staleness logic if needed
+      isStale: false
     };
   } catch (error) {
-    console.error(`Error fetching location for bus ${busId}:`, error);
+    console.error(`Error fetching location for bus ${busKey}:`, error);
     throw error;
   }
 };
 
+/**
+ * Find the busId for a given route number by searching both Firebase projects.
+ * @param {string} routeNumber - The route number (e.g. 'R-3')
+ * @returns {{ busId: string, fleet: string }}
+ */
 export const getBusIdFromRoute = async (routeNumber) => {
   try {
-    const routesRef = firestoreDb.collection('routes');
-    const querySnapshot = await routesRef.where('routeNumber', '==', routeNumber).limit(1).get();
+    const { dbA, dbB } = await import("../config/firebaseAdmin.js");
+
+    // Search Project A first
+    let querySnapshot = await dbA.firestoreDb.collection('routes')
+      .where('routeNumber', '==', routeNumber).limit(1).get();
+    let fleet = 'A';
+
+    if (querySnapshot.empty && dbB !== dbA) {
+      querySnapshot = await dbB.firestoreDb.collection('routes')
+        .where('routeNumber', '==', routeNumber).limit(1).get();
+      fleet = 'B';
+    }
 
     if (querySnapshot.empty) {
       throw new Error(`No route found with routeNumber: ${routeNumber}`);
@@ -62,7 +83,7 @@ export const getBusIdFromRoute = async (routeNumber) => {
       throw new Error(`Route ${routeNumber} does not have a busId`);
     }
 
-    return routeData.busId;
+    return { busId: routeData.busId, fleet };
   } catch (error) {
     console.error(`Error finding busId for route ${routeNumber}:`, error);
     throw error;
