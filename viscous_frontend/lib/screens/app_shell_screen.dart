@@ -29,13 +29,52 @@ class _AppShellScreenState extends ConsumerState<AppShellScreen> {
   Widget build(BuildContext context) {
     final tab = ref.watch(currentTabProvider);
     final theme = Theme.of(context);
+    final trackingState = ref.watch(trackingProvider);
+    final hasConnectionError = trackingState.isConnectionError;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: _tabs[tab],
+      body: Column(
+        children: [
+          if (hasConnectionError) _buildOfflineBanner(context),
+          Expanded(child: _tabs[tab]),
+        ],
+      ),
       bottomNavigationBar: _PremiumNavBar(
         currentIndex: tab,
         onTap: (i) => ref.read(currentTabProvider.notifier).state = i,
+      ),
+    );
+  }
+
+  Widget _buildOfflineBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final alertColor = isDark ? const Color(0xFFFFB930) : const Color(0xFFD97706);
+    final bgColor = isDark ? const Color(0xFF1E1700) : const Color(0xFFFEF3C7);
+
+    return Container(
+      width: double.infinity,
+      color: bgColor,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, color: alertColor, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'Offline — showing cached data',
+              style: TextStyle(
+                color: alertColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

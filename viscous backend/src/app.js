@@ -6,7 +6,40 @@ import { notFoundHandler } from "./middlewares/notFound.js";
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  "https://eistatech.in",
+  /\.eistatech\.in$/
+];
+
+if (process.env.NODE_ENV !== "production") {
+  allowedOrigins.push(
+    "http://localhost:3000",
+    "http://localhost:5000",
+    /localhost:\d+$/,
+    /127\.0\.0\.1:\d+$/
+  );
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    const isAllowed = allowedOrigins.some((allowed) => {
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return allowed === origin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

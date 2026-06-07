@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'app_state.dart';
 import 'firebase_background.dart';
 import 'screens/app_shell_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/storage_service.dart';
 
 Future<void> main() async {
@@ -39,49 +41,84 @@ Future<void> main() async {
   );
 }
 
+/// Stable router instance — must not be recreated on auth changes or the app
+/// resets to [initialLocation] and shows the splash again after login/logout.
+final goRouterProvider = Provider<GoRouter>((ref) {
+  final router = GoRouter(
+    // Splash only on cold start; login/logout navigate directly elsewhere.
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/app',
+        builder: (context, state) => const AppShellScreen(),
+      ),
+      GoRoute(
+        path: '/app/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+    ],
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+      // Let the splash screen pass through — it navigates itself.
+      if (location == '/') return null;
+      final isAuthenticated = ref.read(authStateProvider);
+      final onLogin = location == '/login';
+      if (!isAuthenticated && !onLogin) return '/login';
+      if (isAuthenticated && onLogin) return '/app';
+      return null;
+    },
+  );
+
+  ref.listen<bool>(authStateProvider, (_, __) => router.refresh());
+  ref.onDispose(router.dispose);
+  return router;
+});
+
 class BusTrackerApp extends ConsumerWidget {
   const BusTrackerApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAuthenticated = ref.watch(authStateProvider);
+    final router = ref.watch(goRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
-
-    final router = GoRouter(
-      initialLocation: isAuthenticated ? '/app' : '/login',
-      routes: [
-        GoRoute(
-          path: '/login',
-          builder: (context, state) => const LoginScreen(),
-        ),
-        GoRoute(
-          path: '/app',
-          builder: (context, state) => const AppShellScreen(),
-        ),
-        GoRoute(
-          path: '/app/notifications',
-          builder: (context, state) => const NotificationsScreen(),
-        ),
-      ],
-      redirect: (context, state) {
-        final onLogin = state.matchedLocation == '/login';
-        if (!isAuthenticated && !onLogin) return '/login';
-        if (isAuthenticated && onLogin) return '/app';
-        return null;
-      },
-    );
 
     return MaterialApp.router(
       title: 'Viscous',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       themeMode: themeMode,
+      // Dark navy behind every route — visible during fade transitions so there
+      // is never a white frame between splash → login / app.
+      color: const Color(0xFF060C1E),
+      builder: (context, child) => ColoredBox(
+        color: const Color(0xFF060C1E),
+        child: child ?? const SizedBox.shrink(),
+      ),
 
       // ── LIGHT THEME ── Safety-first: royal blue authority + amber school bus ──
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
+        fontFamily: GoogleFonts.inter().fontFamily,
         scaffoldBackgroundColor: const Color(0xFFEEF2FF),
+        // Fade transition on every route change — no jarring white flash.
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: _FadeTransitionBuilder(),
+            TargetPlatform.iOS:     _FadeTransitionBuilder(),
+            TargetPlatform.linux:   _FadeTransitionBuilder(),
+            TargetPlatform.macOS:   _FadeTransitionBuilder(),
+            TargetPlatform.windows: _FadeTransitionBuilder(),
+          },
+        ),
         dividerColor: const Color(0xFFBFDBFE),
         colorScheme: const ColorScheme.light(
           primary:   Color(0xFF1D4ED8),   // royal blue – authority & safety
@@ -153,7 +190,18 @@ class BusTrackerApp extends ConsumerWidget {
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
+        fontFamily: GoogleFonts.inter().fontFamily,
         scaffoldBackgroundColor: const Color(0xFF080D22),
+        // Fade transition on every route change — no jarring white flash.
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: _FadeTransitionBuilder(),
+            TargetPlatform.iOS:     _FadeTransitionBuilder(),
+            TargetPlatform.linux:   _FadeTransitionBuilder(),
+            TargetPlatform.macOS:   _FadeTransitionBuilder(),
+            TargetPlatform.windows: _FadeTransitionBuilder(),
+          },
+        ),
         dividerColor: const Color(0xFF1A2550),
         colorScheme: const ColorScheme.dark(
           primary:   Color(0xFF00D4FF),   // electric cyan
@@ -219,6 +267,40 @@ class BusTrackerApp extends ConsumerWidget {
               s.contains(WidgetState.selected) ? const Color(0xFF0E3A4A) : const Color(0xFF1A2550)),
         ),
       ),
+    );
+  }
+}
+
+// ─── Smooth fade transition for every GoRouter page change ───────────────────
+// Replaces the default platform slide/cut transition so there is no white
+// frame between the dark splash and the login / app screens.
+class _FadeTransitionBuilder implements PageTransitionsBuilder {
+  const _FadeTransitionBuilder();
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 500);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 250);
+
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition => null;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return FadeTransition(
+      // 350ms ease-in-out — feels instant but avoids a hard cut
+      opacity: CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeInOut,
+      ),
+      child: child,
     );
   }
 }

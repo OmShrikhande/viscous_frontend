@@ -1,4 +1,5 @@
 import * as routeService from "../services/route.service.js";
+import { logger } from "../utils/logger.js";
 
 export const getRoute = async (req, res) => {
   try {
@@ -16,7 +17,7 @@ export const getRoute = async (req, res) => {
 
     res.status(200).json({ success: true, data: route });
   } catch (error) {
-    console.error("Error fetching route:", error);
+    logger.error("Error fetching route", { error: error.message });
     res.status(500).json({ error: "Internal server error" });
   }
 };

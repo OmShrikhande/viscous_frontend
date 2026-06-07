@@ -6,6 +6,7 @@ import {
   getRouteByNumber 
 } from "../services/busTracking.service.js";
 import { dbA, dbB } from "../config/firebaseAdmin.js";
+import { logger } from "../utils/logger.js";
 
 export const getCurrentLocation = async (_req, res, next) => {
   try {
@@ -87,7 +88,7 @@ export const getBusLocationByUser = async (req, res, next) => {
     });
 
   } catch (error) {
-    console.error('Error getting bus location:', error);
+    logger.error('Error getting bus location', { error: error.message });
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get bus location'

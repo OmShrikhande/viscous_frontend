@@ -22,6 +22,17 @@ Color _textDim(BuildContext ctx) => Theme.of(ctx).brightness == Brightness.dark
 const Color _stopRed = Color(0xFFE11D48);
 const Color _stopRedDark = Color(0xFFB91C1C);
 
+class LatLngTween extends Tween<LatLng> {
+  LatLngTween({super.begin, super.end});
+
+  @override
+  LatLng lerp(double t) {
+    final lat = (begin?.latitude ?? 0.0) + ((end?.latitude ?? 0.0) - (begin?.latitude ?? 0.0)) * t;
+    final lng = (begin?.longitude ?? 0.0) + ((end?.longitude ?? 0.0) - (begin?.longitude ?? 0.0)) * t;
+    return LatLng(lat, lng);
+  }
+}
+
 class MapTab extends ConsumerStatefulWidget {
   const MapTab({super.key});
 
@@ -29,20 +40,30 @@ class MapTab extends ConsumerStatefulWidget {
   ConsumerState<MapTab> createState() => _MapTabState();
 }
 
-class _MapTabState extends ConsumerState<MapTab> {
+class _MapTabState extends ConsumerState<MapTab> with TickerProviderStateMixin {
   late final MapController _mapController;
   Timer? _mapFollowDebounce;
+  bool _hasFittedCamera = false;
+
+  AnimationController? _markerAnimController;
+  Animation<LatLng>? _markerAnimation;
+  LatLng _animatedBusPosition = const LatLng(0, 0);
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _markerAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
   }
 
   @override
   void dispose() {
     _mapFollowDebounce?.cancel();
     _mapController.dispose();
+    _markerAnimController?.dispose();
     super.dispose();
   }
 
@@ -137,8 +158,52 @@ class _MapTabState extends ConsumerState<MapTab> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    if (tracking.busPosition.latitude == 0 && tracking.busPosition.longitude == 0) {
+      _animatedBusPosition = const LatLng(0, 0);
+    } else if (_animatedBusPosition.latitude == 0) {
+      _animatedBusPosition = tracking.busPosition;
+    }
+
+    if (!_hasFittedCamera && tracking.stops.isNotEmpty) {
+      _hasFittedCamera = true;
+      final points = tracking.stops.map((s) => s.position).toList();
+      if (tracking.busPosition.latitude != 0 && tracking.busPosition.longitude != 0) {
+        points.add(tracking.busPosition);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _mapController.fitCamera(
+          CameraFit.coordinates(
+            coordinates: points,
+            padding: const EdgeInsets.only(
+              top: 140,
+              bottom: 160,
+              left: 50,
+              right: 50,
+            ),
+            maxZoom: 16,
+          ),
+        );
+      });
+    }
+
     ref.listen(trackingProvider.select((s) => s.busPosition), (prev, next) {
       if (next.latitude == 0 && next.longitude == 0) return;
+      
+      final startPos = _animatedBusPosition.latitude == 0 ? next : _animatedBusPosition;
+      
+      _markerAnimController?.reset();
+      _markerAnimation = LatLngTween(begin: startPos, end: next).animate(
+        CurvedAnimation(parent: _markerAnimController!, curve: Curves.easeInOut),
+      )..addListener(() {
+        if (mounted) {
+          setState(() {
+            _animatedBusPosition = _markerAnimation!.value;
+          });
+        }
+      });
+      _markerAnimController?.forward();
+
       _mapFollowDebounce?.cancel();
       _mapFollowDebounce = Timer(const Duration(milliseconds: 320), () {
         if (!mounted) return;
@@ -203,23 +268,83 @@ class _MapTabState extends ConsumerState<MapTab> {
                               child: _StopPin(isDark: isDark),
                             ),
                           ),
-                          // Bus marker (speed is shown in the bottom speed bar)
-                          Marker(
-                            point: tracking.busPosition,
-                            width: 60,
-                            height: 60,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _showBusDetails(tracking),
-                              child: _PulsingBusMarker(
-                                isMoving: tracking.isBusRunning,
+                          // Bus marker — only shown when position data is valid
+                          if (_animatedBusPosition.latitude != 0 ||
+                              _animatedBusPosition.longitude != 0)
+                            Marker(
+                              point: _animatedBusPosition,
+                              width: 60,
+                              height: 60,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showBusDetails(tracking),
+                                child: _PulsingBusMarker(
+                                  isMoving: tracking.isBusRunning,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ],
                   ),
+                  // ── Empty state overlay ─────────────────────────────────
+                  if (tracking.busPosition.latitude == 0 &&
+                      tracking.busPosition.longitude == 0 &&
+                      !tracking.routeStarted)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Center(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 18,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface.withValues(
+                                alpha: 0.92,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.25,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.directions_bus_outlined,
+                                  size: 40,
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Waiting for bus data…',
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodyLarge?.color,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'The bus location will appear here\nonce the route starts.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _textDim(context),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
 
                   // ── Top info overlay ────────────────────────────────────
                   SafeArea(

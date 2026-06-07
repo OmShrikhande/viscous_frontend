@@ -11,6 +11,12 @@ if (!hasBaseFirebase) {
 if (!process.env.PORT) {
   throw new Error("Missing required environment variable: PORT");
 }
+if (!process.env.JWT_SECRET) {
+  throw new Error("Missing required environment variable: JWT_SECRET");
+}
+if (process.env.NODE_ENV === "production" && !process.env.INTERNAL_API_KEY) {
+  throw new Error("Missing required environment variable: INTERNAL_API_KEY in production mode");
+}
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",

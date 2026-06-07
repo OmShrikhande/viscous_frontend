@@ -491,7 +491,9 @@ const fetchSnapshotBaseFromFirestore = async (routeId, fleet) => {
       busId: route.busId,
       from: route.from,
       to: route.to,
-      college: route.college
+      college: route.college,
+      driverContact: route.driverContact || "+91 9000000001",
+      schoolContact: route.schoolContact || "+91 9000000002"
     };
   }
 
@@ -735,7 +737,9 @@ export const syncSingleRoute = async (route) => {
         busId: route.busId,
         from: route.from,
         to: route.to,
-        college: route.college
+        college: route.college,
+        driverContact: route.driverContact || "+91 9000000001",
+        schoolContact: route.schoolContact || "+91 9000000002"
       },
       routeStops,
       currentStopIndex: roundTripState.currentStopIndex,

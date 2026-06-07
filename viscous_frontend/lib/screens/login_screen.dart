@@ -87,19 +87,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final size = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ── Per-mode palette ────────────────────────────────────────────────────
-    final bg = isDark ? const Color(0xFF050A1E) : const Color(0xFFEEF2FF);
-    final surface = isDark ? const Color(0xFF0C1230) : Colors.white;
-    final border = isDark ? const Color(0xFF1C2B5A) : const Color(0xFFBFDBFE);
-    final primary = isDark ? const Color(0xFF00D4FF) : const Color(0xFF1D4ED8);
+    // ── Auth palette — always dark navy (matches splash) so route transitions
+    // never flash a pale/white scaffold when the app theme is light.
+    final bg = const Color(0xFF060C1E);
+    final surface = const Color(0xFF0C1230);
+    final border = const Color(0xFF1C2B5A);
+    final primary = isDark ? const Color(0xFF00D4FF) : const Color(0xFF4D7CFF);
     final primaryDim = isDark ? const Color(0xFF0099CC) : const Color(0xFF2563EB);
-    final text = isDark ? const Color(0xFFEAF0FF) : const Color(0xFF1E293B);
-    final textDim = isDark ? const Color(0xFF4A5D8A) : const Color(0xFF64748B);
+    final text = const Color(0xFFEAF0FF);
+    final textDim = const Color(0xFF7A9EFF);
     final amber = isDark ? const Color(0xFFFFB930) : const Color(0xFFD97706);
 
     final waveColors = isDark
         ? [const Color(0xFF00D4FF), const Color(0xFFFFB930), const Color(0xFF00D4FF)]
-        : [const Color(0xFF1D4ED8), const Color(0xFF2563EB), const Color(0xFF1D4ED8)];
+        : [const Color(0xFF2563EB), const Color(0xFF4D7CFF), const Color(0xFF2563EB)];
 
     return Scaffold(
       backgroundColor: bg,
@@ -265,7 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: surface.withValues(alpha: isDark ? 0.72 : 0.9),
+            color: surface.withValues(alpha: 0.72),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(color: border, width: 1.5),
             boxShadow: [

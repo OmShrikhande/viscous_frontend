@@ -1,4 +1,5 @@
 import { getDbForFleet, realtimeDb } from "../config/firebaseAdmin.js";
+import { logger } from "../utils/logger.js";
 
 // Cache to store previous positions for speed calculation
 const positionCache = new Map();
@@ -47,7 +48,7 @@ export const getBusLocation = async (busKey, fleet = 'A') => {
       isStale: false
     };
   } catch (error) {
-    console.error(`Error fetching location for bus ${busKey}:`, error);
+    logger.error(`Error fetching location for bus ${busKey}`, { error: error.message });
     throw error;
   }
 };
@@ -85,7 +86,7 @@ export const getBusIdFromRoute = async (routeNumber) => {
 
     return { busId: routeData.busId, fleet };
   } catch (error) {
-    console.error(`Error finding busId for route ${routeNumber}:`, error);
+    logger.error(`Error finding busId for route ${routeNumber}`, { error: error.message });
     throw error;
   }
 };
