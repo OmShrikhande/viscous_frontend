@@ -50,6 +50,7 @@ dependencies:
   geolocator: ^14.0.2
   package_info_plus: ^8.0.0
   google_fonts: ^6.2.1
+  flutter_native_splash: ^2.4.3
 
 dev_dependencies:
   flutter_test:
@@ -113,3 +114,12 @@ flutter_launcher_icons:
   image_path: "logo.png"
   adaptive_icon_background: "#002366"
   adaptive_icon_foreground: "logo.png"
+
+flutter_native_splash:
+  color: "#060C1E"
+  image: logo.png
+  android: true
+  ios: true
+  web: false
+  fullscreen: true
+

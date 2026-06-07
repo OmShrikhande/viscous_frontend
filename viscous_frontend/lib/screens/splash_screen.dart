@@ -1,10 +1,14 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../app_state.dart';
+
 
 /// Premium animated splash screen.
 /// Shows for ~2.8 seconds then auto-redirects to /login or /app.
@@ -42,6 +46,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb) {
+      FlutterNativeSplash.remove();
+    }
 
     // Master: 2000ms drives all entry animations
     _masterCtrl = AnimationController(

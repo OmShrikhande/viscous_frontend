@@ -292,15 +292,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       child: Icon(Icons.lock_rounded, color: primary, size: 18),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Sign In',
-                            style: TextStyle(
-                                color: text, fontSize: 20, fontWeight: FontWeight.w800)),
-                        Text('Welcome back — please verify yourself.',
-                            style: TextStyle(color: textDim, fontSize: 11)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Sign In',
+                              style: TextStyle(
+                                  color: text, fontSize: 20, fontWeight: FontWeight.w800)),
+                          Text(
+                            'Welcome back — please verify yourself.',
+                            style: TextStyle(color: textDim, fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -394,13 +400,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 const SizedBox(height: 20),
                 Center(
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.security_rounded, size: 12, color: textDim.withValues(alpha: 0.5)),
                       const SizedBox(width: 5),
-                      Text(
-                        'Protected by Viscous Security™',
-                        style: TextStyle(color: textDim.withValues(alpha: 0.5), fontSize: 10),
+                      Flexible(
+                        child: Text(
+                          'Protected by Viscous Security™',
+                          style: TextStyle(color: textDim.withValues(alpha: 0.5), fontSize: 10),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
