@@ -1,4 +1,4 @@
-import { firestoreDb } from "../config/firebaseAdmin.js";
+import { getDbForFleet } from "../config/firebaseAdmin.js";
 
 const normalizeNotificationPreferences = (value) => {
   const src = value && typeof value === "object" ? value : {};
@@ -40,7 +40,8 @@ export const upsertFcmToken = async (req, res) => {
       return res.status(400).json({ success: false, message: "fcmToken is required" });
     }
 
-    const userRef = firestoreDb.collection("users").doc(userId);
+    const db = getDbForFleet(req.user?.fleet);
+    const userRef = db.firestoreDb.collection("users").doc(userId);
     const userDoc = await userRef.get();
     const userData = userDoc.exists ? userDoc.data() : {};
     const existingTokens = Array.isArray(userData?.fcmTokens)
@@ -76,7 +77,8 @@ export const getMyProfile = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const userDoc = await firestoreDb.collection("users").doc(userId).get();
+    const db = getDbForFleet(req.user?.fleet);
+    const userDoc = await db.firestoreDb.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -119,8 +121,9 @@ export const updateMyProfile = async (req, res) => {
     }
     payload.updatedAt = new Date().toISOString();
 
-    await firestoreDb.collection("users").doc(userId).set(payload, { merge: true });
-    const updatedDoc = await firestoreDb.collection("users").doc(userId).get();
+    const db = getDbForFleet(req.user?.fleet);
+    await db.firestoreDb.collection("users").doc(userId).set(payload, { merge: true });
+    const updatedDoc = await db.firestoreDb.collection("users").doc(userId).get();
 
     return res.status(200).json({
       success: true,

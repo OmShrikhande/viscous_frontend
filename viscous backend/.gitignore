@@ -1,3 +1,5 @@
 node*
 *env
 route-number-1-firebase-adminsdk-fbsvc-928fab7722.json
+clearDateCollections.js
+listCollections.js

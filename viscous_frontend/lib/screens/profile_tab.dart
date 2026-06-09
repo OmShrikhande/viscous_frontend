@@ -6,6 +6,7 @@ import '../app_state.dart';
 import '../models/login_response.dart';
 import '../services/profile_service.dart';
 import '../services/storage_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // ─── Theme-resolved helpers ────────────────────────────────────────────────────
 Color _primary(BuildContext ctx) => Theme.of(ctx).colorScheme.primary;
@@ -43,6 +44,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
   bool _saving = false;
   bool _notifyReached = true;
   bool _notifyEta = true;
+  String _appVersion = '';
   bool _notifyOneStopAway = true;
   bool _notifyRouteLastStop = true;
   bool _notifyBusStarted = true;
@@ -52,6 +54,14 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
   void initState() {
     super.initState();
     _loadProfile();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = 'Viscous v${info.version}');
+    } catch (_) {}
   }
 
   Future<void> _loadProfile({bool showLoader = true}) async {
@@ -116,6 +126,27 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
 
   Future<void> _saveProfile() async {
     setState(() => _saving = true);
+    if (_quietHoursEnabled) {
+      final timeRegex = RegExp(r'^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$');
+      final start = _quietStartController.text.trim();
+      final end = _quietEndController.text.trim();
+      if (!timeRegex.hasMatch(start) || !timeRegex.hasMatch(end)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Invalid Quiet Hours format. Use HH:mm (e.g., 22:00).'),
+              backgroundColor: _red(context),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+        setState(() => _saving = false);
+        return;
+      }
+    }
     try {
       final updated = await _profileService.updateMyProfile(
         name: _nameController.text.trim(),
@@ -271,6 +302,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                             controller: _phoneController,
                             icon: Icons.phone_rounded,
                             inputType: TextInputType.phone,
+                            readOnly: true,
                           ),
                           const SizedBox(height: 10),
                           _ProfileField(
@@ -376,7 +408,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                             iconColor: _red(context),
                             title: 'Emergency contacts',
                             subtitle:
-                                'Driver: +91 9000000001  •  School: +91 9000000002',
+                                'Driver: ${tracking.routeMeta?.driverContact ?? "+91 9000000001"}  •  School: ${tracking.routeMeta?.schoolContact ?? "+91 9000000002"}',
                           ),
 
                           const SizedBox(height: 24),
@@ -388,6 +420,38 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
 
                           // ── Logout button ───────────────────────────────
                           _LogoutButton(onLogout: _logout),
+
+                          // ── App version ─────────────────────────────────
+                          if (_appVersion.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Column(
+                                children: [
+                                  Center(
+                                    child: Text(
+                                      _appVersion,
+                                      style: TextStyle(
+                                        color: _textDim(context).withValues(alpha: 0.6),
+                                        fontSize: 10,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Center(
+                                    child: Text(
+                                      'EISTATECH',
+                                      style: TextStyle(
+                                        color: _primary(context).withValues(alpha: 0.7),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
                           const SizedBox(height: 32),
                         ],
@@ -764,33 +828,60 @@ class _ProfileField extends StatelessWidget {
   final TextEditingController controller;
   final IconData icon;
   final TextInputType inputType;
+  final bool readOnly;
 
   const _ProfileField({
     required this.label,
     required this.controller,
     required this.icon,
     this.inputType = TextInputType.text,
+    this.readOnly = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final resolvedFillColor = readOnly
+        ? (isDark ? const Color(0xFF131E3A) : const Color(0xFFF1F5F9))
+        : theme.colorScheme.surface;
+
+    final resolvedTextColor = readOnly
+        ? _textDim(context)
+        : theme.textTheme.bodyLarge?.color;
+
     return TextField(
       controller: controller,
       keyboardType: inputType,
-      style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 14),
+      readOnly: readOnly,
+      style: TextStyle(color: resolvedTextColor, fontSize: 14),
       cursorColor: primary,
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: _textDim(context), fontSize: 13),
-        prefixIcon: Icon(icon, color: primary, size: 19),
+        prefixIcon: Icon(
+          icon,
+          color: readOnly ? _textDim(context) : primary,
+          size: 19,
+        ),
+        suffixIcon: readOnly
+            ? Icon(
+                Icons.lock_outline_rounded,
+                color: _textDim(context),
+                size: 16,
+              )
+            : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         filled: true,
-        fillColor: theme.colorScheme.surface,
+        fillColor: resolvedFillColor,
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: primary, width: 1.5),
+          borderSide: BorderSide(
+            color: readOnly ? theme.dividerColor : primary,
+            width: readOnly ? 1.0 : 1.5,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#002366</color>
+    <!-- Matches Flutter splash / login navy — no white flash on cold start -->
+    <color name="splash_navy">#060C1E</color>
 </resources>

@@ -13,6 +13,8 @@ class RouteMeta {
     required this.from,
     required this.to,
     required this.college,
+    required this.driverContact,
+    required this.schoolContact,
   });
 
   final String id;
@@ -21,6 +23,8 @@ class RouteMeta {
   final String from;
   final String to;
   final String college;
+  final String driverContact;
+  final String schoolContact;
 
   factory RouteMeta.fromJson(Map<String, dynamic> json) {
     return RouteMeta(
@@ -30,6 +34,8 @@ class RouteMeta {
       from: (json['from'] ?? '').toString(),
       to: (json['to'] ?? '').toString(),
       college: (json['college'] ?? '').toString(),
+      driverContact: (json['driverContact'] ?? '').toString(),
+      schoolContact: (json['schoolContact'] ?? '').toString(),
     );
   }
 }
@@ -63,6 +69,7 @@ class TrackingState {
     required this.confidenceLevel,
     this.routeMeta,
     this.progressToNextStop = 0.0,
+    required this.isConnectionError,
   });
 
   final List<BusStop> stops;
@@ -92,6 +99,7 @@ class TrackingState {
   /// current and next stop. Updated by a client-side animation tick so the bus
   /// glides instead of teleporting between snapshots.
   final double progressToNextStop;
+  final bool isConnectionError;
 
   String get currentStop => stops.isEmpty
       ? 'Loading...'
@@ -145,6 +153,7 @@ class TrackingState {
     RouteMeta? routeMeta,
     List<BusStop>? stops,
     double? progressToNextStop,
+    bool? isConnectionError,
   }) {
     return TrackingState(
       stops: stops ?? this.stops,
@@ -167,6 +176,7 @@ class TrackingState {
       confidenceLevel: confidenceLevel ?? this.confidenceLevel,
       routeMeta: routeMeta ?? this.routeMeta,
       progressToNextStop: progressToNextStop ?? this.progressToNextStop,
+      isConnectionError: isConnectionError ?? this.isConnectionError,
     );
   }
 }
@@ -235,6 +245,7 @@ class TrackingController extends StateNotifier<TrackingState> {
       confidenceScore: 0,
       confidenceLevel: "unknown",
       routeMeta: null,
+      isConnectionError: false,
     );
   }
 
@@ -454,9 +465,11 @@ class TrackingController extends StateNotifier<TrackingState> {
             (data['confidenceScore'] as num?)?.toInt() ?? state.confidenceScore,
         confidenceLevel: (data['confidenceLevel'] ?? state.confidenceLevel)
             .toString(),
+        isConnectionError: false,
       );
     } catch (error) {
       debugPrint('Tracking refresh failed: $error');
+      state = state.copyWith(isConnectionError: true);
     } finally {
       _inFlight = false;
     }

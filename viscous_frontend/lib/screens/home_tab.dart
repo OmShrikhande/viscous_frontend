@@ -403,68 +403,72 @@ class _StopCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: isLeft
-            ? CrossAxisAlignment.start
-            : CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!isLeft) const Spacer(),
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  stop.name,
-                  style: TextStyle(
-                    color: theme.textTheme.bodyLarge?.color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  softWrap: true,
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: isLeft
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!isLeft) const Spacer(),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: color),
                 ),
-              ),
-              if (isLeft) const Spacer(),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if (etaLabel != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: amber.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: amber.withValues(alpha: 0.45)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule_rounded, color: amber, size: 11),
-                  const SizedBox(width: 4),
-                  Text(
-                    'ETA  $etaLabel',
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    stop.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: amber,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
+                      color: theme.textTheme.bodyLarge?.color,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
-              ),
-            )
-          else
-            Text(
-              'Scheduled',
-              style: TextStyle(color: _textDim(context), fontSize: 11),
+                ),
+                if (isLeft) const Spacer(),
+              ],
             ),
-        ],
+            const SizedBox(height: 4),
+            if (etaLabel != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: amber.withValues(alpha: 0.45)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.schedule_rounded, color: amber, size: 10),
+                    const SizedBox(width: 3),
+                    Text(
+                      'ETA $etaLabel',
+                      style: TextStyle(
+                        color: amber,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Text(
+                'Scheduled',
+                style: TextStyle(color: _textDim(context), fontSize: 10),
+              ),
+          ],
+        ),
       ),
     );
   }
