@@ -681,7 +681,7 @@ export const syncSingleRoute = async (route) => {
     const exactStopMatch =
       routeStops[nearestStop.stop.index].latitude === latitude &&
       routeStops[nearestStop.stop.index].longitude === longitude;
-    const effectiveRouteProximityMeters = Math.max(env.scheduler.routeProximityMeters, 50);
+    const effectiveRouteProximityMeters = Math.max(env.scheduler.routeProximityMeters, 10);
     const withinRouteArea = exactStopMatch || nearestStop.meters <= effectiveRouteProximityMeters;
 
     const roundTripState = updateRoundTripState({
