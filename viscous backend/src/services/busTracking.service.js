@@ -1,4 +1,4 @@
-import { dbA, dbB, getDbForFleet } from "../config/firebaseAdmin.js";
+import { dbA, dbB, getDbForFleet, appA, appB } from "../config/firebaseAdmin.js";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 
@@ -284,8 +284,7 @@ const sendUsersNotification = async ({ routeId, title, body, users, fleet, data 
   }
 
   try {
-    const { getApp } = await import("firebase-admin/app");
-    const app = fleet === "B" ? getApp("appB") : getApp();
+    const app = fleet === "B" && appB ? appB : appA;
     const messaging = (await import("firebase-admin/messaging")).getMessaging(app);
     const response = await messaging.sendEachForMulticast({
       notification: { title, body },

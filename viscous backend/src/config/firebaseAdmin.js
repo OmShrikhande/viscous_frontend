@@ -23,6 +23,7 @@ const appA = initializeApp({
 // Export default instances (pointing to Project A) for backward compatibility
 export const realtimeDb = getDatabase(appA);
 export const firestoreDb = getFirestore(appA);
+export { appA };
 
 export const dbA = {
   realtimeDb,
@@ -43,6 +44,8 @@ export const dbB = appB ? {
   realtimeDb: getDatabase(appB),
   firestoreDb: getFirestore(appB)
 } : dbA;
+
+export { appB };
 
 /**
  * Returns database references for the requested fleet/project ('A' or 'B')
