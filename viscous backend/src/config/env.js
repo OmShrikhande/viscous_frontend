@@ -36,7 +36,7 @@ export const env = {
     // Aggressive idle cooldown when bus is stationary at a stop — saves ~80% writes overnight.
     idlePollingStartMs: Number(process.env.IDLE_POLLING_START_MS ?? 90_000),
     idlePollingCooldownMs: Number(process.env.IDLE_POLLING_COOLDOWN_MS ?? 60_000),
-    routeProximityMeters: Number(process.env.ROUTE_PROXIMITY_METERS ?? 100),
+    routeProximityMeters: Number(process.env.ROUTE_PROXIMITY_METERS ?? 50),
     movementThresholdMeters: Number(process.env.MOVEMENT_THRESHOLD_METERS ?? 10),
     internalApiKey: process.env.INTERNAL_API_KEY ?? ""
   },

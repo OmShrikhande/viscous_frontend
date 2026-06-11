@@ -18,7 +18,7 @@ const appA = initializeApp({
   credential: getCredential(env.firebase.serviceAccountJsonA),
   databaseURL: env.firebase.databaseURLA,
   projectId: env.firebase.projectIdA
-}, "appA");
+});
 
 // Export default instances (pointing to Project A) for backward compatibility
 export const realtimeDb = getDatabase(appA);

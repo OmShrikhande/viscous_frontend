@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'storage_service.dart';
 import 'user_service.dart';
 
 class PushNotificationService {
@@ -13,6 +14,7 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final UserService _userService = UserService();
+  final StorageService _storageService = StorageService();
   bool _isInitialized = false;
   Future<void>? _initializing;
   String _lastForegroundMessageKey = '';
@@ -22,7 +24,16 @@ class PushNotificationService {
   Future<void> initialize({
     GlobalKey<ScaffoldMessengerState>? messengerKey,
   }) async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      // If already initialized, check if the token needs to be registered (e.g. if the user switched)
+      try {
+        final token = await _messaging.getToken();
+        await _registerTokenIfNeeded(token);
+      } catch (e) {
+        debugPrint('[FCM] token retrieval failed during check: $e');
+      }
+      return;
+    }
     if (_initializing != null) return _initializing!;
 
     _initializing = _initializeInternal(messengerKey: messengerKey);
@@ -141,11 +152,17 @@ class PushNotificationService {
 
   Future<void> _registerTokenIfNeeded(String? token) async {
     if (token == null || token.isEmpty) return;
-    if (token == _lastUploadedToken) return;
+    
+    // Check if the current user has already uploaded this token
+    final loginData = await _storageService.getLoginData();
+    final userId = loginData?.user?.id ?? '';
+    final tokenUserKey = '$token:$userId';
+
+    if (tokenUserKey == _lastUploadedToken) return;
     try {
       await _userService.upsertFcmToken(token);
-      _lastUploadedToken = token;
-      debugPrint('[FCM] token uploaded');
+      _lastUploadedToken = tokenUserKey;
+      debugPrint('[FCM] token uploaded for user $userId');
     } catch (error) {
       debugPrint('[FCM] token upload failed: $error');
     }
